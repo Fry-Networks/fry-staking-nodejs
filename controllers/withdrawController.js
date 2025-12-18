@@ -1,0 +1,78 @@
+const Withdraw = require("../models/withdrawSchema");
+
+// Add a new withdrawal log
+const addWithdrawLog = async (req, res) => {
+  try {
+    const { tokens, wallet, poolId, appId } = req.body;
+
+    if (!tokens || !wallet || !poolId || !appId) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+    }
+
+    const newWithdraw = new Withdraw({
+      tokens,
+      wallet,
+      poolId,
+      appId
+    });
+
+    const saved = await newWithdraw.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Withdrawal log saved successfully",
+      data: saved,
+    });
+  } catch (error) {
+    console.error("Error saving withdrawal log:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to save withdrawal log",
+      error: error.message,
+    });
+  }
+};
+
+// Get all withdrawal logs
+const getAllWithdrawals = async (req, res) => {
+  try {
+    const logs = await Withdraw.find().sort({ timestamp: -1 });
+    res.status(200).json({
+      success: true,
+      data: logs,
+    });
+  } catch (error) {
+    console.error("Error fetching withdrawal logs:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch withdrawal logs",
+      error: error.message,
+    });
+  }
+};
+
+// Get withdrawals by wallet address
+const getWithdrawalsByWallet = async (req, res) => {
+  try {
+    const { wallet } = req.params;
+    const logs = await Withdraw.find({ wallet }).sort({ timestamp: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: logs,
+    });
+  } catch (error) {
+    console.error("Error fetching wallet logs:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch wallet logs",
+      error: error.message,
+    });
+  }
+};
+
+module.exports = {
+  addWithdrawLog,
+  getAllWithdrawals,
+  getWithdrawalsByWallet
+};
