@@ -58,14 +58,14 @@ const addYieldFarmingData = async (req, res) => {
         !poolId ||
         !token1 ||
         !token2 ||
-        !totalLiquidityProviders ||
+        totalLiquidityProviders == null ||
         !rewardToken ||
-        !apy ||
-        !duration ||
-        !startTime ||
-        !endTime ||
-        !tvc ||
-        !rewardsDistributed
+        apy == null ||
+        duration == null ||
+        startTime == null ||
+        endTime == null ||
+        tvc == null ||
+        rewardsDistributed == null
       ) {
         return res.status(400).json({
           success: false,
@@ -112,7 +112,33 @@ const addYieldFarmingData = async (req, res) => {
   };
   
 // get yield farming data by walletId
-const getYieldFarmingDataByWalletId = async (req, res) => {};
+const getYieldFarmingDataByWalletId = async (req, res) => {
+    const { walletId } = req.params;
+
+    try {
+      const yieldFarmingData = await YieldFarming.find({ poolCreator: walletId });
+
+      if (!yieldFarmingData || yieldFarmingData.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: `No yield farming data found for wallet: ${walletId}`,
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Yield farming data fetched successfully.",
+        data: yieldFarmingData,
+      });
+    } catch (error) {
+      console.error("Error fetching yield farming data by walletId:", error);
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while fetching yield farming data.",
+        error: error.message,
+      });
+    }
+  };
 
 // Delete yield farming data
 const deleteYieldFarmingData = async (req, res) => {

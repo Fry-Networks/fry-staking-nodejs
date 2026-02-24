@@ -26,9 +26,9 @@ const claimFarmRewardSchema = new mongoose.Schema({
     required: true,
   },
 }, {
-  timestamps: true, // Adds createdAt and updatedAt
-  collection: 'claimfarmrewards' // MongoDB collection name
+  timestamps: true,
+  collection: 'claimFarmRewards'
 });
 
-const claimFarmRewards = mongoose.model("claimFarmRewards", claimFarmRewardSchema, "claimFarmRewards");
+const claimFarmRewards = mongoose.model("claimFarmRewards", claimFarmRewardSchema);
 module.exports = claimFarmRewards;

@@ -68,8 +68,8 @@ const addUserSwapHistory = async (req, res) => {
   try {
     const { userId, amount, token1, token2, liquidityPoolId, fee } = req.body;
 
-    if (!userId || !amount || !token1 || !token2 || !liquidityPoolId || !fee) {
-      return res.status(400).json({ message: "All fields are required." });
+    if (!userId || amount == null || !token1 || !token2 || !liquidityPoolId || fee == null) {
+      return res.status(400).json({ success: false, message: "All fields are required." });
     }
 
     const newSwapHistory = new UserSwapHistory({
@@ -90,16 +90,16 @@ const addUserSwapHistory = async (req, res) => {
     const savedSwapHistory = await newSwapHistory.save();
 
     res.status(201).json({
+      success: true,
       message: "User swap history added successfully.",
       data: savedSwapHistory,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        message: "An error occurred while adding swap history.",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while adding swap history.",
+      error: error.message,
+    });
   }
 };
 

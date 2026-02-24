@@ -71,7 +71,7 @@ const addStakerData = async (req, res) => {
     try {
       const { walletId, stakedAmount, stakeTime, poolId, rewardClaimed } = req.body;
   
-      if (!walletId || !stakedAmount || !stakeTime || !poolId) {
+      if (!walletId || stakedAmount == null || stakeTime == null || !poolId) {
         return res.status(400).json({
           success: false,
           message: "Missing required fields: walletId, stakedAmount, stakeTime, or poolId.",

@@ -1,13 +1,16 @@
 const Farming = require("../models/farmingSchema");
 
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // Get all farming data
 const getAllFarmingData = async (req, res) => {
   try {
-    // console.log(req);
     const { tokenName } = req.query;
 
     const query = tokenName
-      ? { 'rewardToken.name': { $regex: tokenName, $options: 'i' } }
+      ? { 'rewardToken.name': { $regex: escapeRegex(tokenName), $options: 'i' } }
       : {};
 
     const farmingData = await Farming.find(query);
@@ -39,7 +42,7 @@ const getFarmingDataByCreatorId = async (req, res) => {
     const query = { creatorId };
 
     if (tokenName) {
-      query['rewardToken.name'] = { $regex: tokenName, $options: 'i' };
+      query['rewardToken.name'] = { $regex: escapeRegex(tokenName), $options: 'i' };
     }
 
     const farmingData = await Farming.find(query);
@@ -63,22 +66,19 @@ const getFarmingDataByCreatorId = async (req, res) => {
 };
 
 const getFarmingDataByAppId = async (req, res) => {
-  const { appId } = req.params; // Extract appId from route parameters
+  const { appId } = req.params;
   const { tokenName } = req.query;
 
   try {
-    // Use appId in the query
-    const query = { appId }; // This assumes you have an `appId` field in your Farming model
+    const query = { appId: Number(appId) };
 
     // If tokenName is provided, add it as a filter in the query
     if (tokenName) {
-      query['rewardToken.name'] = { $regex: tokenName, $options: 'i' };
+      query['rewardToken.name'] = { $regex: escapeRegex(tokenName), $options: 'i' };
     }
 
     // Query the database with the modified query object
     const farmingData = await Farming.find(query);
-    console.log(appId);
-    console.log(farmingData);
 
     res.status(200).json({
       success: true,
@@ -99,20 +99,12 @@ const getFarmingDataByAppId = async (req, res) => {
 };
 
 const getFarmingDataByOnlyAppId = async (req, res) => {
-  const { appId } = req.params; // Extract appId from route parameters
-  console.log("Received appId:", appId); // Debugging: Log the appId
+  const { appId } = req.params;
 
   try {
-    // Build query based on appId only
-    const query = { appId };
-
-    // Query the database with the appId filter
+    const query = { appId: Number(appId) };
     const farmingData = await Farming.find(query);
 
-    // Log the result for debugging
-    console.log("Farming Data:", farmingData);
-
-    // Return the response
     res.status(200).json({
       success: true,
       message: farmingData.length === 0
@@ -170,7 +162,7 @@ const addFarmingData = async (req, res) => {
 
     const savedFarming = await newFarming.save();
 
-    res.status(200).json({
+    res.status(201).json({
       success: true,
       message: "Farming pool created successfully.",
       data: savedFarming,
@@ -190,9 +182,10 @@ const addFarmingData = async (req, res) => {
 const updateFarmingData = async (req, res) => {
   const { appId } = req.params;
   const updatedData = req.body;
+  const numericAppId = Number(appId);
 
   try {
-    const currentData = await Farming.findOne({ appId });
+    const currentData = await Farming.findOne({ appId: numericAppId });
 
     if (!currentData) {
       return res.status(404).json({
@@ -202,7 +195,7 @@ const updateFarmingData = async (req, res) => {
     }
 
     const updated = await Farming.findOneAndUpdate(
-      { appId },
+      { appId: numericAppId },
       {
         $set: updatedData, // Replace all fields with new data
       },

@@ -172,7 +172,7 @@ const getFarmingRecordsByAppId = async (req, res) => {
 
   try {
     // Fetch farming records where the appId matches
-    const records = await Farming.find({ appId }).sort({ createdAt: -1 });
+    const records = await Farming.find({ appId: Number(appId) }).sort({ createdAt: -1 });
 
     if (!records.length) {
       return res.status(404).json({

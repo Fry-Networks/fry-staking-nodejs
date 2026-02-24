@@ -159,17 +159,14 @@ const getUserStakingStats = async (req, res) => {
     // Fetch all staking records by wallet
     const stakingRecords = await StakingToken.find({ wallet });
 
-    // Calculate total staked amount
-    const totalStaked = stakingRecords.reduce((sum, rec) => sum + (rec.totalStaked/1000000 || 0), 0);
-
-    // Calculate total earned rewards
-    // const totalReward = stakingRecords.reduce((sum, rec) => sum + (rec.earnedReward || 0), 0);
+    // Calculate total staked amount (stored in microAlgos, convert to Algos)
+    const totalStaked = stakingRecords.reduce((sum, rec) => sum + ((rec.totalStaked || 0) / 1000000), 0);
 
     // Fetch all withdrawal records by wallet
     const withdrawalRecords = await withdrawToken.find({ wallet });
 
-    // Calculate total withdrawn amount
-    const totalWithdrawn = withdrawalRecords.reduce((sum, rec) => sum + (rec.tokens || 0), 0);
+    // Calculate total withdrawn amount (same unit conversion as totalStaked)
+    const totalWithdrawn = withdrawalRecords.reduce((sum, rec) => sum + ((rec.tokens || 0) / 1000000), 0);
 
     // Final stake = totalStaked - totalWithdrawn
     const activeStake = totalStaked - totalWithdrawn;
