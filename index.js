@@ -41,6 +41,24 @@ app.use("/farmingwithdraw", farmingWithdrawRoutes);
 app.use('/claimfarmrewards', claimFarmRewardRoutes);
 app.use('/gasfee', gasFeeRoutes);
 app.use("/user", userRoutes);
+
+// 404 handler for undefined routes
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.method} ${req.originalUrl} not found`,
+  });
+});
+
+// Global error handler
+app.use((err, req, res, _next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({
+    success: false,
+    message: "Internal server error",
+  });
+});
+
 // Connect to MongoDB
 connectDB();
 

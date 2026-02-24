@@ -1,5 +1,9 @@
 const Token = require("../models/tokensSchema");
 
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const getAllTokens = async (req, res) => {
   try {
     const tokens = await Token.find();
@@ -143,7 +147,7 @@ const searchTokenByName = async (req, res) => {
 
     // Case-insensitive search using regex
     const tokens = await Token.find({
-      tokenName: { $regex: tokenName, $options: 'i' }
+      tokenName: { $regex: escapeRegex(tokenName), $options: 'i' }
     });
 
     if (tokens.length === 0) {

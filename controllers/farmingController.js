@@ -1,12 +1,16 @@
 const Farming = require("../models/farmingSchema");
 
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // Get all farming data
 const getAllFarmingData = async (req, res) => {
   try {
     const { tokenName } = req.query;
 
     const query = tokenName
-      ? { 'rewardToken.name': { $regex: tokenName, $options: 'i' } }
+      ? { 'rewardToken.name': { $regex: escapeRegex(tokenName), $options: 'i' } }
       : {};
 
     const farmingData = await Farming.find(query);
@@ -38,7 +42,7 @@ const getFarmingDataByCreatorId = async (req, res) => {
     const query = { creatorId };
 
     if (tokenName) {
-      query['rewardToken.name'] = { $regex: tokenName, $options: 'i' };
+      query['rewardToken.name'] = { $regex: escapeRegex(tokenName), $options: 'i' };
     }
 
     const farmingData = await Farming.find(query);
@@ -70,7 +74,7 @@ const getFarmingDataByAppId = async (req, res) => {
 
     // If tokenName is provided, add it as a filter in the query
     if (tokenName) {
-      query['rewardToken.name'] = { $regex: tokenName, $options: 'i' };
+      query['rewardToken.name'] = { $regex: escapeRegex(tokenName), $options: 'i' };
     }
 
     // Query the database with the modified query object

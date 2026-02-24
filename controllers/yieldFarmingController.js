@@ -58,14 +58,14 @@ const addYieldFarmingData = async (req, res) => {
         !poolId ||
         !token1 ||
         !token2 ||
-        !totalLiquidityProviders ||
+        totalLiquidityProviders == null ||
         !rewardToken ||
-        !apy ||
-        !duration ||
-        !startTime ||
-        !endTime ||
-        !tvc ||
-        !rewardsDistributed
+        apy == null ||
+        duration == null ||
+        startTime == null ||
+        endTime == null ||
+        tvc == null ||
+        rewardsDistributed == null
       ) {
         return res.status(400).json({
           success: false,

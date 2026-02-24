@@ -1,12 +1,16 @@
 const Staking = require("../models/stakingSchema");
 
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // Get all staking data
 const getAllStakingData = async(req, res) => {
     try {
         const { tokenName } = req.query;
 
         const query = tokenName ?
-            { 'stakeToken.name': { $regex: tokenName, $options: 'i' } } :
+            { 'stakeToken.name': { $regex: escapeRegex(tokenName), $options: 'i' } } :
             {};
 
 
@@ -41,7 +45,7 @@ const getStakingDataByCreatorId = async(req, res) => {
 
         // If tokenName is provided, add filter for stakeToken.name
         if (tokenName) {
-            query['stakeToken.name'] = { $regex: tokenName, $options: 'i' }; // Case-insensitive search
+            query['stakeToken.name'] = { $regex: escapeRegex(tokenName), $options: 'i' }; // Case-insensitive search
         }
 
         // Fetch the staking data based on the query
