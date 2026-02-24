@@ -19,4 +19,15 @@ router.post('/add', validate(farmingSchema), addFarmingData);
 router.put('/update/:appId', updateFarmingData);
 router.delete('/delete/:id', deleteFarmingData);
 
+// Backward-compatible: legacy /:id route tries appId first, then creatorId
+router.get('/:id', async (req, res, next) => {
+  const { id } = req.params;
+  if (/^\d+$/.test(id)) {
+    req.params.appId = id;
+    return getFarmingDataByOnlyAppId(req, res, next);
+  }
+  req.params.creatorId = id;
+  return getFarmingDataByCreatorId(req, res, next);
+});
+
 module.exports = router;

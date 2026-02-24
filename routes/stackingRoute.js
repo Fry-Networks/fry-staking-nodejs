@@ -19,4 +19,8 @@ router.get('/id/:id', getStakingDataById);
 router.post('/add', validate(stakingSchema), addStakingData);
 router.delete('/delete/:id', deleteStakingData);
 router.put('/update/:id', updateStakingData);
+
+// Backward-compatible: legacy /:creatorId route
+router.get('/:creatorId', getStakingDataByCreatorId);
+
 module.exports = router;
