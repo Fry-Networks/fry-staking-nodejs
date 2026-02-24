@@ -71,8 +71,29 @@ const getWithdrawalsByWallet = async (req, res) => {
   }
 };
 
+// Get withdrawals by pool ID
+const getWithdrawalsByPool = async (req, res) => {
+  try {
+    const { poolId } = req.params;
+    const logs = await Withdraw.find({ poolId }).sort({ timestamp: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: logs,
+    });
+  } catch (error) {
+    console.error("Error fetching pool withdrawal logs:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch withdrawal logs for pool",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   addWithdrawLog,
   getAllWithdrawals,
-  getWithdrawalsByWallet
+  getWithdrawalsByWallet,
+  getWithdrawalsByPool
 };

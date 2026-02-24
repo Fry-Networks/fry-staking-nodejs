@@ -12,9 +12,6 @@ const getAllStakingData = async(req, res) => {
 
         const stakingData = await Staking.find(query);
 
-        // console.log("stakingData");
-        // console.log(stakingData);
-
         res.status(200).json({
             success: true,
             message: stakingData.length === 0 ?
@@ -38,7 +35,6 @@ const getAllStakingData = async(req, res) => {
 const getStakingDataByCreatorId = async(req, res) => {
     const { creatorId } = req.params;
     const { tokenName } = req.query; // Get tokenName from query parameters
-    console.log('in getStakingDataByCreatorId');
     try {
         // Build the query to include creatorId and optionally tokenName
         const query = { creatorId };
@@ -61,6 +57,59 @@ const getStakingDataByCreatorId = async(req, res) => {
     } catch (error) {
         console.error("Error fetching staking data:", error);
 
+        res.status(500).json({
+            success: false,
+            message: "An error occurred while fetching staking data.",
+            error: error.message,
+        });
+    }
+};
+
+// Get staking data by ID
+const getStakingDataById = async(req, res) => {
+    const { id } = req.params;
+
+    try {
+        const stakingData = await Staking.findById(id);
+
+        if (!stakingData) {
+            return res.status(404).json({
+                success: false,
+                message: `Staking data with ID ${id} not found.`,
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Staking data fetched successfully.",
+            data: stakingData,
+        });
+    } catch (error) {
+        console.error("Error fetching staking data by ID:", error);
+        res.status(500).json({
+            success: false,
+            message: "An error occurred while fetching staking data.",
+            error: error.message,
+        });
+    }
+};
+
+// Get staking data by contract ID (appId)
+const getStakingDataByContractId = async(req, res) => {
+    const { contractId } = req.params;
+
+    try {
+        const stakingData = await Staking.find({ stakingContractId: contractId });
+
+        res.status(200).json({
+            success: true,
+            message: stakingData.length === 0
+                ? `No staking data found for contract ID: ${contractId}`
+                : "Staking data fetched successfully.",
+            data: stakingData,
+        });
+    } catch (error) {
+        console.error("Error fetching staking data by contract ID:", error);
         res.status(500).json({
             success: false,
             message: "An error occurred while fetching staking data.",
@@ -104,7 +153,7 @@ const addStakingData = async(req, res) => {
 
         const savedStakingData = await newStakingData.save();
 
-        res.status(200).json({
+        res.status(201).json({
             success: true,
             message: "Staking data added successfully.",
             data: savedStakingData,
@@ -206,7 +255,9 @@ const deleteStakingData = async(req, res) => {
 
 module.exports = {
     getAllStakingData,
+    getStakingDataById,
     getStakingDataByCreatorId,
+    getStakingDataByContractId,
     addStakingData,
     updateStakingData,
     deleteStakingData,

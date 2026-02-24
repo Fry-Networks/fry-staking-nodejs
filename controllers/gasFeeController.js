@@ -3,8 +3,7 @@ const GasFee = require("../models/gasFeeSchema");
 const addGasFee = async (req, res) => {
   const { appId, userId, gasAmount, gasType } = req.body;
 
-  // Validation
-  if (!appId || !userId || !gasAmount || !gasType) {
+  if (appId == null || !userId || gasAmount == null || !gasType) {
     return res.status(400).json({
       success: false,
       message: "Please provide all required fields: appId, userId, gasAmount, gasType",
@@ -31,6 +30,41 @@ const addGasFee = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "An error occurred while adding the gas fee.",
+      error: error.message,
+    });
+  }
+};
+
+const getAllGasFees = async (req, res) => {
+  try {
+    const fees = await GasFee.find().sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      data: fees,
+    });
+  } catch (error) {
+    console.error("Error fetching all gas fees:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch gas fees.",
+      error: error.message,
+    });
+  }
+};
+
+const getGasFeesByUserId = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const fees = await GasFee.find({ userId }).sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      data: fees,
+    });
+  } catch (error) {
+    console.error("Error fetching gas fees by userId:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch gas fees for user.",
       error: error.message,
     });
   }
@@ -132,6 +166,8 @@ const getWeeklyGasFees = async (req, res) => {
 
 module.exports = {
   addGasFee,
+  getAllGasFees,
+  getGasFeesByUserId,
   getMonthlyGasFees,
   getWeeklyGasFees
 };

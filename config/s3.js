@@ -1,5 +1,4 @@
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
-console.log("AWS_REGION:", process.env.AWS_REGION);
 
 const s3 = new S3Client({
   region: process.env.AWS_REGION, // credentials come from env vars

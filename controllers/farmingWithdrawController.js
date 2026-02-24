@@ -71,8 +71,29 @@ const getFarmingWithdrawalsByWallet = async (req, res) => {
   }
 };
 
+// Get farming token withdrawals by pool ID
+const getFarmingWithdrawalsByPool = async (req, res) => {
+  try {
+    const { poolId } = req.params;
+    const logs = await FarmingWithdraw.find({ poolId }).sort({ timestamp: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: logs,
+    });
+  } catch (error) {
+    console.error("Error fetching farming withdrawal logs by pool:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch farming withdrawal logs for pool",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   addFarmingWithdrawLog,
   getAllFarmingWithdrawals,
-  getFarmingWithdrawalsByWallet
+  getFarmingWithdrawalsByWallet,
+  getFarmingWithdrawalsByPool
 };

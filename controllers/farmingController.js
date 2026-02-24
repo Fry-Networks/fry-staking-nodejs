@@ -3,7 +3,6 @@ const Farming = require("../models/farmingSchema");
 // Get all farming data
 const getAllFarmingData = async (req, res) => {
   try {
-    // console.log(req);
     const { tokenName } = req.query;
 
     const query = tokenName
@@ -77,8 +76,6 @@ const getFarmingDataByAppId = async (req, res) => {
 
     // Query the database with the modified query object
     const farmingData = await Farming.find(query);
-    console.log(appId);
-    console.log(farmingData);
 
     res.status(200).json({
       success: true,
@@ -99,20 +96,12 @@ const getFarmingDataByAppId = async (req, res) => {
 };
 
 const getFarmingDataByOnlyAppId = async (req, res) => {
-  const { appId } = req.params; // Extract appId from route parameters
-  console.log("Received appId:", appId); // Debugging: Log the appId
+  const { appId } = req.params;
 
   try {
-    // Build query based on appId only
     const query = { appId };
-
-    // Query the database with the appId filter
     const farmingData = await Farming.find(query);
 
-    // Log the result for debugging
-    console.log("Farming Data:", farmingData);
-
-    // Return the response
     res.status(200).json({
       success: true,
       message: farmingData.length === 0
@@ -170,7 +159,7 @@ const addFarmingData = async (req, res) => {
 
     const savedFarming = await newFarming.save();
 
-    res.status(200).json({
+    res.status(201).json({
       success: true,
       message: "Farming pool created successfully.",
       data: savedFarming,

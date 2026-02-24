@@ -31,7 +31,7 @@ const addToken = async (req, res) => {
     if (!tokenId || !tokenName || !tokenSymbol || !tokenImage) {
       return res.status(400).json({
         success: false,
-        message: "Please provide all required fields: tokenId, tokenName, tokenImage.",
+        message: "Please provide all required fields: tokenId, tokenName, tokenSymbol, tokenImage.",
       });
     }
   
@@ -61,22 +61,21 @@ const addToken = async (req, res) => {
   
 
   const updateToken = async (req, res) => {
-    const { id } = req.params; // Token ID from URL parameter
-    const { tokenId, tokenName, tokenImage } = req.body;
-  
-    // Simple validation
-    if (!tokenId || !tokenName || !tokenImage) {
+    const { id } = req.params;
+    const { tokenId, tokenName, tokenSymbol, tokenImage } = req.body;
+
+    if (!tokenId || !tokenName || !tokenSymbol || !tokenImage) {
       return res.status(400).json({
         success: false,
-        message: "Please provide all required fields: tokenId, tokenName, tokenImage.",
+        message: "Please provide all required fields: tokenId, tokenName, tokenSymbol, tokenImage.",
       });
     }
-  
+
     try {
       const updatedToken = await Token.findByIdAndUpdate(
         id,
-        { tokenId, tokenName, tokenImage },
-        { new: true } // Return the updated document
+        { tokenId, tokenName, tokenSymbol, tokenImage },
+        { new: true, runValidators: true }
       );
   
       if (!updatedToken) {

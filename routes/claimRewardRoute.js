@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { validate, claimRewardSchema } = require('../middleware/validate');
 
 const {
   addClaimReward,
@@ -8,16 +9,9 @@ const {
   getClaimRewardsByPool,
 } = require('../controllers/claimRewardController');
 
-// Add a new claim
-router.post('/add', addClaimReward);
-
-// Get all claimed rewards
+router.post('/add', validate(claimRewardSchema), addClaimReward);
 router.get('/all', getAllClaimRewards);
-
-// Get claimed rewards by wallet ID
 router.get('/wallet/:walletId', getClaimRewardsByWallet);
-
-// Get claimed rewards by pool ID
 router.get('/pool/:poolId', getClaimRewardsByPool);
 
 module.exports = router;
