@@ -5,7 +5,7 @@ const addWithdrawLog = async (req, res) => {
   try {
     const { tokens, wallet, poolId, appId } = req.body;
 
-    if (!tokens || !wallet || !poolId || !appId) {
+    if (tokens == null || !wallet || !poolId || appId == null) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 

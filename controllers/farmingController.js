@@ -62,12 +62,11 @@ const getFarmingDataByCreatorId = async (req, res) => {
 };
 
 const getFarmingDataByAppId = async (req, res) => {
-  const { appId } = req.params; // Extract appId from route parameters
+  const { appId } = req.params;
   const { tokenName } = req.query;
 
   try {
-    // Use appId in the query
-    const query = { appId }; // This assumes you have an `appId` field in your Farming model
+    const query = { appId: Number(appId) };
 
     // If tokenName is provided, add it as a filter in the query
     if (tokenName) {
@@ -99,7 +98,7 @@ const getFarmingDataByOnlyAppId = async (req, res) => {
   const { appId } = req.params;
 
   try {
-    const query = { appId };
+    const query = { appId: Number(appId) };
     const farmingData = await Farming.find(query);
 
     res.status(200).json({
@@ -179,9 +178,10 @@ const addFarmingData = async (req, res) => {
 const updateFarmingData = async (req, res) => {
   const { appId } = req.params;
   const updatedData = req.body;
+  const numericAppId = Number(appId);
 
   try {
-    const currentData = await Farming.findOne({ appId });
+    const currentData = await Farming.findOne({ appId: numericAppId });
 
     if (!currentData) {
       return res.status(404).json({
@@ -191,7 +191,7 @@ const updateFarmingData = async (req, res) => {
     }
 
     const updated = await Farming.findOneAndUpdate(
-      { appId },
+      { appId: numericAppId },
       {
         $set: updatedData, // Replace all fields with new data
       },

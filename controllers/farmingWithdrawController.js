@@ -5,7 +5,7 @@ const addFarmingWithdrawLog = async (req, res) => {
   try {
     const { amount, userWallet, poolId, farmingTokenId } = req.body;
 
-    if (!amount || !userWallet || !poolId || !farmingTokenId) {
+    if (amount == null || !userWallet || !poolId || !farmingTokenId) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
