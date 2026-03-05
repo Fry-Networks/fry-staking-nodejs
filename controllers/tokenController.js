@@ -31,8 +31,8 @@ const getAllTokens = async (req, res) => {
 const addToken = async (req, res) => {
     const { tokenId, tokenName,tokenSymbol, tokenImage } = req.body;
   
-    // Simple validation
-    if (!tokenId || !tokenName || !tokenSymbol || !tokenImage) {
+    // Simple validation (tokenId can be 0 for ALGO, so check explicitly for undefined/null)
+    if ((tokenId === undefined || tokenId === null) || !tokenName || !tokenSymbol || !tokenImage) {
       return res.status(400).json({
         success: false,
         message: "Please provide all required fields: tokenId, tokenName, tokenSymbol, tokenImage.",

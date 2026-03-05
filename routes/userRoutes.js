@@ -1,6 +1,7 @@
 const express = require("express");
 const multer = require("multer");
 const { createOrUpdateUser, getUserByWalletId } = require("../controllers/userController");
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 const upload = multer({
@@ -10,6 +11,7 @@ const upload = multer({
 
 router.post(
   "/create-or-update",
+  requireAuth,
   upload.fields([
     { name: "profilePicture", maxCount: 1 },
     { name: "banner", maxCount: 1 },

@@ -140,6 +140,13 @@ const addFarmingData = async (req, res) => {
     fryRewardFee,
     aprRate,
     appId,
+    poolType,
+    dexProvider,
+    stakeTokenName,
+    stakeTokenSymbol,
+    rewardTokenName,
+    rewardTokenSymbol,
+    lpPairName,
   } = req.body;
 
   try {
@@ -158,6 +165,13 @@ const addFarmingData = async (req, res) => {
       fryRewardFee,
       aprRate,
       appId,
+      poolType,
+      dexProvider,
+      stakeTokenName,
+      stakeTokenSymbol,
+      rewardTokenName,
+      rewardTokenSymbol,
+      lpPairName,
     });
 
     const savedFarming = await newFarming.save();

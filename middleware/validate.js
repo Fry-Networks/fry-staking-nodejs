@@ -34,6 +34,14 @@ const stakingSchema = Joi.object({
   rewardTokenAmount: Joi.number().required(),
   stakingContractId: Joi.string().required(),
   lockPeriod: Joi.number().required(),
+  isGated: Joi.boolean().default(false),
+  gateConfig: Joi.object({
+    nftAsaId: Joi.number().default(0),
+    nftCreatorAddress: Joi.string().allow('').default(''),
+    collectionName: Joi.string().allow('').default(''),
+    minNftCount: Joi.number().min(1).default(1),
+    gateMessage: Joi.string().allow('').default('This pool requires an NFT to participate.'),
+  }).default({}),
 });
 
 // Farming pool creation schema
@@ -58,6 +66,21 @@ const farmingSchema = Joi.object({
   fryRewardFee: Joi.number().required(),
   aprRate: Joi.number().default(0),
   appId: Joi.number().required(),
+  poolType: Joi.string().valid('lp', 'single').default('lp'),
+  dexProvider: Joi.string().allow('').default(''),
+  stakeTokenName: Joi.string().allow('').default(''),
+  stakeTokenSymbol: Joi.string().allow('').default(''),
+  rewardTokenName: Joi.string().allow('').default(''),
+  rewardTokenSymbol: Joi.string().allow('').default(''),
+  lpPairName: Joi.string().allow('').default(''),
+  isGated: Joi.boolean().default(false),
+  gateConfig: Joi.object({
+    nftAsaId: Joi.number().default(0),
+    nftCreatorAddress: Joi.string().allow('').default(''),
+    collectionName: Joi.string().allow('').default(''),
+    minNftCount: Joi.number().min(1).default(1),
+    gateMessage: Joi.string().allow('').default('This pool requires an NFT to participate.'),
+  }).default({}),
 });
 
 // Token creation schema
@@ -136,6 +159,45 @@ const stakerDataSchema = Joi.object({
   rewardClaimed: Joi.number().default(0),
 });
 
+// Daily reward claim schema
+const dailyRewardClaimSchema = Joi.object({
+  wallet: Joi.string().optional(),
+  fingerprint: Joi.string().required(),
+  turnstileToken: Joi.string().optional(),
+});
+
+// Rewards config update schema (partial update)
+const rewardsConfigUpdateSchema = Joi.object({
+  isEnabled: Joi.boolean(),
+  rewardSchedule: Joi.array().items(Joi.number()),
+  minAlgoBalance: Joi.number().min(0),
+  minFryBalance: Joi.number().min(0),
+  minWalletAgeDays: Joi.number().min(0),
+  maxClaimsPerIpPerDay: Joi.number().min(1),
+  maxClaimsPerFingerprintPerDay: Joi.number().min(1),
+  minOnChainScore: Joi.number().min(0),
+  streakResetHours: Joi.number().min(1),
+  claimCooldownHours: Joi.number().min(1),
+  trustTierThresholds: Joi.array().items(Joi.number()).length(3),
+  trustTierMultipliers: Joi.array().items(Joi.number()).length(4),
+  baselineClaimsPerHour: Joi.number().min(1),
+  yellowMultiplier: Joi.number().min(1),
+  orangeMultiplier: Joi.number().min(1),
+  redMultiplier: Joi.number().min(1),
+  maxDailyClaimsAutoCap: Joi.number().min(1),
+  minTreasuryBalance: Joi.number().min(0),
+  alertWebhookUrl: Joi.string().allow(''),
+  adminWallets: Joi.array().items(Joi.string()),
+  fryAsaId: Joi.number(),
+  indexerUrl: Joi.string(),
+}).min(1);
+
+// Admin ban schema
+const adminBanSchema = Joi.object({
+  wallet: Joi.string().required(),
+  reason: Joi.string().optional().allow(''),
+});
+
 module.exports = {
   validate,
   stakingSchema,
@@ -148,4 +210,7 @@ module.exports = {
   gasFeeSchema,
   swapHistorySchema,
   stakerDataSchema,
+  dailyRewardClaimSchema,
+  rewardsConfigUpdateSchema,
+  adminBanSchema,
 };

@@ -85,6 +85,49 @@ const farmingSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+  poolType: {
+    type: String,
+    enum: ['lp', 'single'],
+    default: 'lp',
+  },
+  dexProvider: {
+    type: String,
+    default: '',
+  },
+  stakeTokenName: {
+    type: String,
+    default: '',
+  },
+  stakeTokenSymbol: {
+    type: String,
+    default: '',
+  },
+  rewardTokenName: {
+    type: String,
+    default: '',
+  },
+  rewardTokenSymbol: {
+    type: String,
+    default: '',
+  },
+  lpPairName: {
+    type: String,
+    default: '',
+  },
+  isGated: {
+    type: Boolean,
+    default: false,
+  },
+  gateConfig: {
+    type: {
+      nftAsaId: { type: Number, default: 0 },
+      nftCreatorAddress: { type: String, default: '' },
+      collectionName: { type: String, default: '' },
+      minNftCount: { type: Number, default: 1 },
+      gateMessage: { type: String, default: 'This pool requires an NFT to participate.' },
+    },
+    default: {},
+  },
 });
 
 const Farming = mongoose.model("Farming", farmingSchema, "farmingPools");

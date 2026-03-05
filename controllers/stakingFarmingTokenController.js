@@ -244,6 +244,16 @@ const getUserFarmingStats = async (req, res) => {
 };
 
 
+const getStakingFarmingTokensByWallet = async (req, res) => {
+  try {
+    const { wallet } = req.params;
+    const records = await StakingFarmingToken.find({ wallet });
+    res.status(200).json({ success: true, data: records });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   addStakingFarmingToken,
   getAllStakingFarmingTokens,
@@ -252,5 +262,6 @@ module.exports = {
   getStakingFarmingByUserAndPool,
   getPoolTokensAndWithdrawn,
   getFarmingRecordsByAppId,
-  getUserFarmingStats 
+  getUserFarmingStats,
+  getStakingFarmingTokensByWallet
 };

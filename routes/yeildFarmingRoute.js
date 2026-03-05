@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { requireAuth } = require('../middleware/auth');
 const {
     getAllYieldFarmingData,
     addYieldFarmingData,
@@ -12,7 +13,7 @@ const {
 
 router.get('/all', getAllYieldFarmingData);
 router.get("/:walletId", getYieldFarmingDataByWalletId);
-router.post('/add', addYieldFarmingData);
-router.delete('/delete/:id', deleteYieldFarmingData);
-router.put('/update/:id', updateYieldFarmingData);
+router.post('/add', requireAuth, addYieldFarmingData);
+router.delete('/delete/:id', requireAuth, deleteYieldFarmingData);
+router.put('/update/:id', requireAuth, updateYieldFarmingData);
 module.exports = router;

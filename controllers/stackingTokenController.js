@@ -222,6 +222,16 @@ const getStakingTokensById = async (req, res) => {
 };
 
 
+const getStakingTokensByWallet = async (req, res) => {
+  try {
+    const { wallet } = req.params;
+    const records = await StakingToken.find({ wallet });
+    res.status(200).json({ success: true, data: records });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   addStakingToken,
   getAllStakingTokens,
@@ -230,5 +240,6 @@ module.exports = {
   getPoolTokensAndWithdrawn,
   getStakingRecordsByAppId,
   getUserStakingStats,
-  getStakingTokensById
+  getStakingTokensById,
+  getStakingTokensByWallet
 };

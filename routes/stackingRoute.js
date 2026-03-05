@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { validate, stakingSchema } = require('../middleware/validate');
+const { requireAuth } = require('../middleware/auth');
 
 const {
     getAllStakingData,
@@ -16,9 +17,9 @@ router.get('/all', getAllStakingData);
 router.get('/contract/:contractId', getStakingDataByContractId);
 router.get('/creator/:creatorId', getStakingDataByCreatorId);
 router.get('/id/:id', getStakingDataById);
-router.post('/add', validate(stakingSchema), addStakingData);
-router.delete('/delete/:id', deleteStakingData);
-router.put('/update/:id', updateStakingData);
+router.post('/add', requireAuth, validate(stakingSchema), addStakingData);
+router.delete('/delete/:id', requireAuth, deleteStakingData);
+router.put('/update/:id', requireAuth, updateStakingData);
 
 // Backward-compatible: legacy /:creatorId route
 router.get('/:creatorId', getStakingDataByCreatorId);

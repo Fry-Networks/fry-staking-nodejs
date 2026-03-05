@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { validate, swapHistorySchema } = require('../middleware/validate');
+const { requireAuth } = require('../middleware/auth');
 
 const {
     getAllUserSwapHistory,
@@ -12,7 +13,7 @@ const {
 
 router.get('/all', getAllUserSwapHistory);
 router.get("/:userId", getUserSwapHistoryByUserId);
-router.post('/add', validate(swapHistorySchema), addUserSwapHistory);
-router.delete('/delete/:id', deleteUserSwapHistory);
-router.put('/update/:id', updateUserSwapHistory);
+router.post('/add', requireAuth, validate(swapHistorySchema), addUserSwapHistory);
+router.delete('/delete/:id', requireAuth, deleteUserSwapHistory);
+router.put('/update/:id', requireAuth, updateUserSwapHistory);
 module.exports = router;

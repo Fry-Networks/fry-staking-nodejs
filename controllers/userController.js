@@ -1,9 +1,12 @@
-const { uploadToS3 } = require("../config/s3");
 const User = require("../models/userSchema");
+const fs = require("fs");
+const path = require("path");
+const mime = require("mime-types");
 
-const mime = require("mime-types"); 
+// Ensure uploads directory exists
+fs.mkdirSync(path.join(__dirname, "../uploads/avatars"), { recursive: true });
 
-// Create or Update User based on walletId, uploading images to S3
+// Create or Update User based on walletId, saving images to local disk
 const createOrUpdateUser = async (req, res) => {
   const { walletId, name, bio } = req.body;
 
@@ -12,8 +15,6 @@ const createOrUpdateUser = async (req, res) => {
   }
 
   try {
-    // Prepare image uploads if provided via multipart/form-data
-    const bucket = process.env.S3_BUCKET_NAME;
     let profilePictureUrl;
     let bannerUrl;
 
@@ -21,28 +22,18 @@ const createOrUpdateUser = async (req, res) => {
     const profileFile = Array.isArray(files.profilePicture) ? files.profilePicture[0] : undefined;
     const bannerFile = Array.isArray(files.banner) ? files.banner[0] : undefined;
 
-    // Helper to build a unique key
-    const buildKey = (kind, file) => {
-      const ext = mime.extension(file.mimetype) || "bin";
-      return `users/${walletId}/${kind}_${Date.now()}.${ext}`;
-    };
-
     if (profileFile) {
-      profilePictureUrl = await uploadToS3({
-        bucket,
-        key: buildKey("profilePicture", profileFile),
-        buffer: profileFile.buffer,
-        contentType: profileFile.mimetype,
-      });
+      const ext = mime.extension(profileFile.mimetype) || "bin";
+      const filename = `${walletId}_profile_${Date.now()}.${ext}`;
+      fs.writeFileSync(path.join(__dirname, "../uploads/avatars", filename), profileFile.buffer);
+      profilePictureUrl = `/uploads/avatars/${filename}`;
     }
 
     if (bannerFile) {
-      bannerUrl = await uploadToS3({
-        bucket,
-        key: buildKey("banner", bannerFile),
-        buffer: bannerFile.buffer,
-        contentType: bannerFile.mimetype,
-      });
+      const ext = mime.extension(bannerFile.mimetype) || "bin";
+      const filename = `${walletId}_banner_${Date.now()}.${ext}`;
+      fs.writeFileSync(path.join(__dirname, "../uploads/avatars", filename), bannerFile.buffer);
+      bannerUrl = `/uploads/avatars/${filename}`;
     }
 
     // Decide create vs update
