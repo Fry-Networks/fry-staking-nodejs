@@ -1,5 +1,6 @@
 require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const express = require("express");
+const rateLimit = require("express-rate-limit");
 const swapHistoryRoute = require("./routes/UserSwapHistoryRoute");
 const stakerDataRoute = require("./routes/stackerDataRoute");
 const yieldFarmingRoute = require("./routes/yeildFarmingRoute");
@@ -14,33 +15,84 @@ const farmingWithdrawRoutes = require("./routes/farmingWithdrawRoutes");
 const claimFarmRewardRoutes = require('./routes/claimFarmRewardRoutes');
 const userRoutes = require("./routes/userRoutes");
 const gasFeeRoutes = require('./routes/gasFeeRoutes');
+const authRoutes = require('./routes/authRoutes');
+const tokenDiscoveryRoute = require('./routes/tokenDiscoveryRoute');
+const swapProxyRoute = require('./routes/swapProxyRoute');
+const rewardsRoute = require('./routes/rewardsRoute');
 
 const cors = require('cors');
 const connectDB = require("./config/db");
 const app = express();
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const path = require("path");
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.use(cors({
-  origin: '*',
+  origin: 'https://fry.farm',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'cache-control', 'Authorization'],
 }));
 
-app.use("/swaphistory", swapHistoryRoute);
-app.use("/stakerdata", stakerDataRoute);
-app.use("/yieldfarming", yieldFarmingRoute);
-app.use("/staking", stakingRoute);
-app.use("/token", TokenRoute);
-app.use('/stakingtoken', stakingTokenRoutes);
-app.use("/withdraw", withdrawRoutes);
-app.use("/claimreward", claimRewardRoute);
-app.use("/farming", farmingRoute);
-app.use("/stakingfarmingtoken", stackingFarmingTokenRoute);
-app.use("/farmingwithdraw", farmingWithdrawRoutes);
-app.use('/claimfarmrewards', claimFarmRewardRoutes);
-app.use('/gasfee', gasFeeRoutes);
-app.use("/user", userRoutes);
+// Rate limiters
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please try again later' },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many auth attempts, please try again later' },
+});
+
+const writeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many write requests, please try again later' },
+});
+
+const readLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests, please try again later' },
+});
+
+// Apply global rate limit
+app.use(globalLimiter);
+
+// Auth routes (with stricter rate limit)
+app.use('/auth', authLimiter, authRoutes);
+
+// Routes use readLimiter (300/15min) — write endpoints are already protected by requireAuth middleware
+app.use("/swaphistory", readLimiter, swapHistoryRoute);
+app.use("/stakerdata", readLimiter, stakerDataRoute);
+app.use("/yieldfarming", readLimiter, yieldFarmingRoute);
+app.use("/staking", readLimiter, stakingRoute);
+app.use("/token", readLimiter, TokenRoute);
+app.use('/stakingtoken', readLimiter, stakingTokenRoutes);
+app.use("/withdraw", readLimiter, withdrawRoutes);
+app.use("/claimreward", readLimiter, claimRewardRoute);
+app.use("/farming", readLimiter, farmingRoute);
+app.use("/stakingfarmingtoken", readLimiter, stackingFarmingTokenRoute);
+app.use("/farmingwithdraw", readLimiter, farmingWithdrawRoutes);
+app.use('/claimfarmrewards', readLimiter, claimFarmRewardRoutes);
+app.use('/gasfee', readLimiter, gasFeeRoutes);
+app.use("/user", readLimiter, userRoutes);
+app.use("/tokens", readLimiter, tokenDiscoveryRoute);
+app.use("/swap", readLimiter, swapProxyRoute);
+app.use("/rewards", readLimiter, rewardsRoute);
 
 // 404 handler for undefined routes
 app.use((req, res) => {

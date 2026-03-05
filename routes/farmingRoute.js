@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { validate, farmingSchema } = require('../middleware/validate');
+const { requireAuth } = require('../middleware/auth');
 
 const {
   getAllFarmingData,
@@ -15,9 +16,9 @@ const {
 router.get('/all', getAllFarmingData);
 router.get('/appId/:appId', getFarmingDataByOnlyAppId);
 router.get('/creator/:creatorId', getFarmingDataByCreatorId);
-router.post('/add', validate(farmingSchema), addFarmingData);
-router.put('/update/:appId', updateFarmingData);
-router.delete('/delete/:id', deleteFarmingData);
+router.post('/add', requireAuth, validate(farmingSchema), addFarmingData);
+router.put('/update/:appId', requireAuth, updateFarmingData);
+router.delete('/delete/:id', requireAuth, deleteFarmingData);
 
 // Backward-compatible: legacy /:id route tries appId first, then creatorId
 router.get('/:id', async (req, res, next) => {

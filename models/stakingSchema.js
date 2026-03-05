@@ -74,6 +74,20 @@ const stakingSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  isGated: {
+    type: Boolean,
+    default: false,
+  },
+  gateConfig: {
+    type: {
+      nftAsaId: { type: Number, default: 0 },
+      nftCreatorAddress: { type: String, default: '' },
+      collectionName: { type: String, default: '' },
+      minNftCount: { type: Number, default: 1 },
+      gateMessage: { type: String, default: 'This pool requires an NFT to participate.' },
+    },
+    default: {},
+  },
 });
 
 
