@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 const WalletStreak = require('../models/walletStreakSchema');
 const DailyClaim = require('../models/dailyClaimSchema');
 
@@ -138,7 +139,7 @@ async function calculateOnChainScore(wallet, accountInfo, indexerUrl) {
       flags.push('low_balance_low_apps');
     }
   } catch (err) {
-    console.error('On-chain score calculation error:', err.message);
+    logger.error('On-chain score calculation error:', err.message);
   }
 
   score = Math.max(0, score);
@@ -347,7 +348,7 @@ async function checkEligibility(wallet, ip, fingerprint, config) {
 
     return { eligible: true, checks, trustScore, trustTier, onChainScore, reasons, suspicionFlags };
   } catch (err) {
-    console.error('Eligibility check error:', err.message);
+    logger.error('Eligibility check error:', err.message);
     addCheck('system_error', false, 'Internal error during eligibility check');
     return { eligible: false, checks, trustScore: 0, trustTier: 0, reasons, suspicionFlags };
   }

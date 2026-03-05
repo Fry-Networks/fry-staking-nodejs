@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 const YieldFarming = require('../models/yieldFarmingSchema');
 
 // Get all yield farming data
@@ -22,7 +23,7 @@ const getAllYieldFarmingData = async (req, res) => {
       });
     } catch (error) {
       // Log the error for debugging
-      console.error("Error fetching yield farming data:", error);
+      logger.error("Error fetching yield farming data:", error);
   
       // Send error response
       res.status(500).json({
@@ -100,7 +101,7 @@ const addYieldFarmingData = async (req, res) => {
       });
     } catch (error) {
       // Log the error for debugging
-      console.error("Error adding yield farming data:", error);
+      logger.error("Error adding yield farming data:", error);
   
       // Send error response
       res.status(500).json({
@@ -131,7 +132,7 @@ const getYieldFarmingDataByWalletId = async (req, res) => {
         data: yieldFarmingData,
       });
     } catch (error) {
-      console.error("Error fetching yield farming data by walletId:", error);
+      logger.error("Error fetching yield farming data by walletId:", error);
       res.status(500).json({
         success: false,
         message: "An error occurred while fetching yield farming data.",
@@ -162,7 +163,7 @@ const deleteYieldFarmingData = async (req, res) => {
       });
     } catch (error) {
     
-      console.error("Error deleting yield farming data:", error);
+      logger.error("Error deleting yield farming data:", error);
   
       
       res.status(500).json({
@@ -207,7 +208,7 @@ const updateYieldFarmingData = async (req, res) => {
       });
     } catch (error) {
       
-      console.error("Error updating yield farming data:", error);
+      logger.error("Error updating yield farming data:", error);
   
       res.status(500).json({
         success: false,

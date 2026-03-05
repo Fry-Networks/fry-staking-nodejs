@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 const UserSwapHistory = require("../models/userSwapHistorySchema");
 
 
@@ -21,7 +22,7 @@ const getAllUserSwapHistory = async (req, res) => {
     });
   } catch (error) {
   
-    console.error("Error fetching user swap history:", error);
+    logger.error("Error fetching user swap history:", error);
 
     res.status(500).json({
       success: false,
@@ -53,7 +54,7 @@ const getUserSwapHistoryByUserId = async (req, res) => {
       });
     } catch (error) {
   
-      console.error("Error fetching user swap history by userId:", error);
+      logger.error("Error fetching user swap history by userId:", error);
 
       res.status(500).json({
         success: false,
@@ -126,7 +127,7 @@ const deleteUserSwapHistory = async (req, res) => {
       });
     } catch (error) {
 
-      console.error("Error deleting swap history:", error);
+      logger.error("Error deleting swap history:", error);
 
       res.status(500).json({
         success: false,
@@ -169,7 +170,7 @@ const updateUserSwapHistory = async (req, res) => {
       });
     } catch (error) {
       
-      console.error("Error updating user swap history by _id:", error);
+      logger.error("Error updating user swap history by _id:", error);
   
       res.status(500).json({
         success: false,

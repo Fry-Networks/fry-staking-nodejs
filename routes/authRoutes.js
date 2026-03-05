@@ -2,31 +2,20 @@ const express = require('express');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const algosdk = require('algosdk');
+const logger = require('../config/logger');
+const redis = require('../config/redis');
 
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const NONCE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-// In-memory nonce store: wallet -> { nonce, expiresAt }
-const nonceStore = new Map();
-
-// Cleanup expired nonces periodically (every 5 minutes)
-setInterval(() => {
-  const now = Date.now();
-  for (const [wallet, entry] of nonceStore) {
-    if (now > entry.expiresAt) {
-      nonceStore.delete(wallet);
-    }
-  }
-}, NONCE_TTL_MS);
+const NONCE_TTL_SEC = 5 * 60; // 5 minutes
 
 /**
  * POST /auth/nonce
  * Body: { wallet: "ALGO_ADDRESS" }
  * Returns: { nonce: "hex_string" }
  */
-router.post('/nonce', (req, res) => {
+router.post('/nonce', async (req, res) => {
   const { wallet } = req.body;
   if (!wallet || typeof wallet !== 'string') {
     return res.status(400).json({ success: false, message: 'wallet is required' });
@@ -38,7 +27,7 @@ router.post('/nonce', (req, res) => {
   }
 
   const nonce = crypto.randomBytes(32).toString('hex');
-  nonceStore.set(wallet, { nonce, expiresAt: Date.now() + NONCE_TTL_MS });
+  await redis.set(`nonce:${wallet}`, nonce, 'EX', NONCE_TTL_SEC);
 
   return res.json({ success: true, nonce });
 });
@@ -63,19 +52,13 @@ router.post('/verify', async (req, res) => {
   }
 
   // Check nonce exists and matches
-  const stored = nonceStore.get(wallet);
-  if (!stored || stored.nonce !== nonce) {
+  const stored = await redis.get(`nonce:${wallet}`);
+  if (!stored || stored !== nonce) {
     return res.status(401).json({ success: false, message: 'Invalid or expired nonce' });
   }
 
-  // Check TTL
-  if (Date.now() > stored.expiresAt) {
-    nonceStore.delete(wallet);
-    return res.status(401).json({ success: false, message: 'Nonce expired' });
-  }
-
   // Consume nonce (single use)
-  nonceStore.delete(wallet);
+  await redis.del(`nonce:${wallet}`);
 
   try {
     // Decode the signed transaction
@@ -111,11 +94,46 @@ router.post('/verify', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Transaction verification failed' });
     }
 
-    const token = jwt.sign({ wallet }, JWT_SECRET, { expiresIn: '24h' });
-    return res.json({ success: true, token });
+    const token = jwt.sign({ wallet }, JWT_SECRET, { algorithm: 'HS256', expiresIn: '24h' });
+    res.cookie('fry_token', token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+    return res.json({ success: true });
   } catch (err) {
-    console.error('Auth verify error:', err);
+    logger.error('Auth verify error:', err);
     return res.status(500).json({ success: false, message: 'Verification error' });
+  }
+});
+
+/**
+ * POST /auth/logout
+ * Clears the auth cookie.
+ */
+router.post('/logout', (req, res) => {
+  res.clearCookie('fry_token', { path: '/' });
+  return res.json({ success: true });
+});
+
+/**
+ * GET /auth/me
+ * Returns auth status (checks cookie validity).
+ */
+router.get('/me', (req, res) => {
+  const token = req.cookies?.fry_token;
+  if (!token) {
+    return res.json({ success: true, authenticated: false });
+  }
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+    return res.json({ success: true, authenticated: true, wallet: decoded.wallet });
+  } catch (_err) {
+    res.clearCookie('fry_token', { path: '/' });
+    return res.json({ success: true, authenticated: false });
   }
 });
 

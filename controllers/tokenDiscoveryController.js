@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 const axios = require('axios');
 const Token = require('../models/tokensSchema');
 
@@ -124,7 +125,7 @@ const lookupAsaById = async (req, res) => {
         { upsert: true, new: true }
       );
     } catch (cacheErr) {
-      console.error('Failed to cache discovered token:', cacheErr.message);
+      logger.error('Failed to cache discovered token:', cacheErr.message);
     }
 
     return res.json({
@@ -132,7 +133,7 @@ const lookupAsaById = async (req, res) => {
       data: { id: asaId, name, symbol, image, decimals, verified: false },
     });
   } catch (error) {
-    console.error('lookupAsaById error:', error.message);
+    logger.error('lookupAsaById error:', error.message);
     if (error.response?.status === 404) {
       return res.status(404).json({ success: false, message: 'Asset not found on Algorand' });
     }
@@ -226,7 +227,7 @@ const searchTokensByName = async (req, res) => {
 
     return res.json({ success: true, data: results });
   } catch (error) {
-    console.error('searchTokensByName error:', error.message);
+    logger.error('searchTokensByName error:', error.message);
     return res.status(500).json({ success: false, message: 'Search failed' });
   }
 };
@@ -310,7 +311,7 @@ const discoverLpTokens = async (req, res) => {
 
     return res.json({ success: true, data: results });
   } catch (error) {
-    console.error('discoverLpTokens error:', error.message);
+    logger.error('discoverLpTokens error:', error.message);
     return res.status(500).json({ success: false, message: 'LP discovery failed' });
   }
 };
@@ -415,7 +416,7 @@ const lookupNftCollection = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('lookupNftCollection error:', error.message);
+    logger.error('lookupNftCollection error:', error.message);
     if (error.response?.status === 404) {
       return res.status(404).json({ success: false, message: 'Asset not found on Algorand' });
     }
@@ -514,7 +515,7 @@ const verifyNftOwnership = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('verifyNftOwnership error:', error.message);
+    logger.error('verifyNftOwnership error:', error.message);
     return res.status(500).json({ success: false, message: 'NFT verification failed' });
   }
 };

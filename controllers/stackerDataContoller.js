@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 const  StakerData = require("../models/stakerDataSchema");
 
 // get all staker data
@@ -20,7 +21,7 @@ const getAllStakerData = async (req, res) => {
       });
     } catch (error) {
       
-      console.error("Error fetching staker data:", error);
+      logger.error("Error fetching staker data:", error);
       res.status(500).json({
         success: false,
         message: "An error occurred while fetching staker data.",
@@ -51,7 +52,7 @@ const getStakerDataByWalletId = async (req, res) => {
       });
     } catch (error) {
  
-      console.error("Error fetching staker data by wallet ID:", error);
+      logger.error("Error fetching staker data by wallet ID:", error);
   
       res.status(500).json({
         success: false,
@@ -95,7 +96,7 @@ const addStakerData = async (req, res) => {
       });
     } catch (error) {
   
-      console.error("Error adding staker data:", error);
+      logger.error("Error adding staker data:", error);
       res.status(500).json({
         success: false,
         message: "An error occurred while adding staker data.",
@@ -128,7 +129,7 @@ const deleteStakerData = async (req, res) => {
         });
     } catch (error) {
       
-        console.error("Error deleting staker data:", error);
+        logger.error("Error deleting staker data:", error);
         res.status(500).json({
             success: false,
             message: "An error occurred while deleting staker data.",
@@ -165,7 +166,7 @@ const updateStakerData = async (req, res) => {
       });
     } catch (error) {
  
-      console.error("Error updating staker data:", error);
+      logger.error("Error updating staker data:", error);
       res.status(500).json({
         success: false,
         message: "An error occurred while updating staker data.",

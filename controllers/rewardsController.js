@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 const algosdk = require('algosdk');
 const crypto = require('crypto');
 const axios = require('axios');
@@ -15,7 +16,7 @@ try {
   treasuryAddr = ogAccount.addr;
   signingKey = rekeyAccount.sk;
 } catch (err) {
-  console.warn('REWARD_MNEMONIC/REWARD_REKEY not configured — reward claiming will be unavailable:', err.message);
+  logger.warn('REWARD_MNEMONIC/REWARD_REKEY not configured — reward claiming will be unavailable:', err.message);
 }
 const algodClient = new algosdk.Algodv2('', 'https://mainnet-api.4160.nodely.dev', 443);
 
@@ -35,7 +36,7 @@ async function verifyTurnstile(token, ip) {
     );
     return { success: data.success, codes: data['error-codes'] };
   } catch (err) {
-    console.error('Turnstile verification error (fail-open):', err.message);
+    logger.error('Turnstile verification error (fail-open):', err.message);
     return { success: true, failOpen: true };
   }
 }
@@ -115,7 +116,7 @@ const getRewardsStatus = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('getRewardsStatus error:', err.message);
+    logger.error('getRewardsStatus error:', err.message);
     return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
@@ -261,7 +262,7 @@ const claimReward = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('claimReward error:', err.message);
+    logger.error('claimReward error:', err.message);
     return res.status(500).json({ success: false, message: 'Failed to process claim' });
   }
 };
@@ -291,7 +292,7 @@ const getRewardsConfig = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('getRewardsConfig error:', err.message);
+    logger.error('getRewardsConfig error:', err.message);
     return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
@@ -319,7 +320,7 @@ const updateRewardsConfig = async (req, res) => {
       data: config,
     });
   } catch (err) {
-    console.error('updateRewardsConfig error:', err.message);
+    logger.error('updateRewardsConfig error:', err.message);
     return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
@@ -346,7 +347,7 @@ const getLeaderboard = async (req, res) => {
 
     return res.status(200).json({ success: true, data });
   } catch (err) {
-    console.error('getLeaderboard error:', err.message);
+    logger.error('getLeaderboard error:', err.message);
     return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
@@ -366,7 +367,7 @@ const adminPause = async (req, res) => {
       data: { level: state.currentLevel, manualPause: state.manualPause },
     });
   } catch (err) {
-    console.error('adminPause error:', err.message);
+    logger.error('adminPause error:', err.message);
     return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
@@ -385,7 +386,7 @@ const adminResume = async (req, res) => {
       data: { level: state.currentLevel, manualPause: state.manualPause },
     });
   } catch (err) {
-    console.error('adminResume error:', err.message);
+    logger.error('adminResume error:', err.message);
     return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
@@ -411,7 +412,7 @@ const adminBanWallet = async (req, res) => {
       message: `Wallet ${wallet.slice(0, 6)}...${wallet.slice(-4)} banned`,
     });
   } catch (err) {
-    console.error('adminBanWallet error:', err.message);
+    logger.error('adminBanWallet error:', err.message);
     return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
@@ -437,7 +438,7 @@ const adminUnbanWallet = async (req, res) => {
       message: `Wallet ${wallet.slice(0, 6)}...${wallet.slice(-4)} unbanned`,
     });
   } catch (err) {
-    console.error('adminUnbanWallet error:', err.message);
+    logger.error('adminUnbanWallet error:', err.message);
     return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };

@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const logger = require('../config/logger');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -7,35 +8,59 @@ const JWT_SECRET = process.env.JWT_SECRET;
  * Attaches req.user = { wallet } on success.
  */
 const requireAuth = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ success: false, message: 'Missing or invalid Authorization header' });
+  // Read JWT from HttpOnly cookie (primary) or Authorization header (fallback)
+  let token = req.cookies?.fry_token;
+  if (!token) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
   }
 
-  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'Authentication required' });
+  }
+
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     req.user = { wallet: decoded.wallet };
     next();
   } catch (err) {
+    // Clear stale cookie
+    res.clearCookie('fry_token', { path: '/' });
     return res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
 };
 
 /**
  * requireAdmin — Must be used AFTER requireAuth.
- * Checks req.user.wallet is in ADMIN_WALLETS env var (comma-separated).
+ * Checks req.user.wallet against ADMIN_WALLETS env var AND rewardsConfig.adminWallets from DB.
  */
-const requireAdmin = (req, res, next) => {
+const requireAdmin = async (req, res, next) => {
   const adminWallets = (process.env.ADMIN_WALLETS || '')
     .split(',')
     .map((w) => w.trim())
     .filter(Boolean);
 
-  if (!req.user || !adminWallets.includes(req.user.wallet)) {
+  if (!req.user) {
     return res.status(403).json({ success: false, message: 'Admin access required' });
   }
-  next();
+
+  if (adminWallets.includes(req.user.wallet)) {
+    return next();
+  }
+
+  try {
+    const RewardsConfig = require('../models/rewardsConfigSchema');
+    const config = await RewardsConfig.getConfig();
+    if (config.adminWallets && config.adminWallets.includes(req.user.wallet)) {
+      return next();
+    }
+  } catch (_err) {
+    // DB check failed, fall through to deny
+  }
+
+  return res.status(403).json({ success: false, message: 'Admin access required' });
 };
 
 /**
@@ -65,7 +90,7 @@ const requireRewardsAdmin = async (req, res, next) => {
       return next();
     }
   } catch (err) {
-    console.error('Error checking rewards admin:', err.message);
+    logger.error('Error checking rewards admin:', err.message);
   }
 
   return res.status(403).json({ success: false, message: 'Rewards admin access required' });

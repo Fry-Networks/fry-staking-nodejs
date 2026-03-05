@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 const Farming = require("../models/farmingSchema");
 
 function escapeRegex(str) {
@@ -23,7 +24,7 @@ const getAllFarmingData = async (req, res) => {
       data: farmingData,
     });
   } catch (error) {
-    console.error("Error fetching farming data:", error);
+    logger.error("Error fetching farming data:", error);
 
     res.status(500).json({
       success: false,
@@ -55,7 +56,7 @@ const getFarmingDataByCreatorId = async (req, res) => {
       data: farmingData,
     });
   } catch (error) {
-    console.error("Error fetching farming data:", error);
+    logger.error("Error fetching farming data:", error);
 
     res.status(500).json({
       success: false,
@@ -88,7 +89,7 @@ const getFarmingDataByAppId = async (req, res) => {
       data: farmingData,
     });
   } catch (error) {
-    console.error("Error fetching farming data:", error);
+    logger.error("Error fetching farming data:", error);
 
     res.status(500).json({
       success: false,
@@ -113,7 +114,7 @@ const getFarmingDataByOnlyAppId = async (req, res) => {
       data: farmingData,
     });
   } catch (error) {
-    console.error("Error fetching farming data:", error);
+    logger.error("Error fetching farming data:", error);
 
     res.status(500).json({
       success: false,
@@ -182,7 +183,7 @@ const addFarmingData = async (req, res) => {
       data: savedFarming,
     });
   } catch (error) {
-    console.error("Error creating farming pool:", error);
+    logger.error("Error creating farming pool:", error);
 
     res.status(500).json({
       success: false,
@@ -222,7 +223,7 @@ const updateFarmingData = async (req, res) => {
       updatedData: updated,
     });
   } catch (error) {
-    console.error("Error updating farming data:", error);
+    logger.error("Error updating farming data:", error);
 
     res.status(500).json({
       success: false,
@@ -253,7 +254,7 @@ const deleteFarmingData = async (req, res) => {
       deletedId: id,
     });
   } catch (error) {
-    console.error("Error deleting farming data:", error);
+    logger.error("Error deleting farming data:", error);
 
     res.status(500).json({
       success: false,

@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 const GasFee = require("../models/gasFeeSchema");
 
 const addGasFee = async (req, res) => {
@@ -26,7 +27,7 @@ const addGasFee = async (req, res) => {
       data: newGasFee,
     });
   } catch (error) {
-    console.error("Error adding gas fee:", error);
+    logger.error("Error adding gas fee:", error);
     res.status(500).json({
       success: false,
       message: "An error occurred while adding the gas fee.",
@@ -43,7 +44,7 @@ const getAllGasFees = async (req, res) => {
       data: fees,
     });
   } catch (error) {
-    console.error("Error fetching all gas fees:", error);
+    logger.error("Error fetching all gas fees:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch gas fees.",
@@ -61,7 +62,7 @@ const getGasFeesByUserId = async (req, res) => {
       data: fees,
     });
   } catch (error) {
-    console.error("Error fetching gas fees by userId:", error);
+    logger.error("Error fetching gas fees by userId:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch gas fees for user.",
@@ -103,7 +104,7 @@ const getMonthlyGasFees = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error('Error fetching monthly gas fees:', error);
+    logger.error('Error fetching monthly gas fees:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch gas fee statistics.',
@@ -155,7 +156,7 @@ const getWeeklyGasFees = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error('Error fetching weekly gas fees:', error);
+    logger.error('Error fetching weekly gas fees:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch weekly gas fee stats',
