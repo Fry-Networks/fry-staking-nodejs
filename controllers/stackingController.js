@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 const Staking = require("../models/stakingSchema");
 
 function escapeRegex(str) {
@@ -24,7 +25,7 @@ const getAllStakingData = async(req, res) => {
             data: stakingData,
         });
     } catch (error) {
-        console.error("Error fetching staking data:", error);
+        logger.error("Error fetching staking data:", error);
 
         res.status(500).json({
             success: false,
@@ -59,7 +60,7 @@ const getStakingDataByCreatorId = async(req, res) => {
             data: stakingData,
         });
     } catch (error) {
-        console.error("Error fetching staking data:", error);
+        logger.error("Error fetching staking data:", error);
 
         res.status(500).json({
             success: false,
@@ -89,7 +90,7 @@ const getStakingDataById = async(req, res) => {
             data: stakingData,
         });
     } catch (error) {
-        console.error("Error fetching staking data by ID:", error);
+        logger.error("Error fetching staking data by ID:", error);
         res.status(500).json({
             success: false,
             message: "An error occurred while fetching staking data.",
@@ -113,7 +114,7 @@ const getStakingDataByContractId = async(req, res) => {
             data: stakingData,
         });
     } catch (error) {
-        console.error("Error fetching staking data by contract ID:", error);
+        logger.error("Error fetching staking data by contract ID:", error);
         res.status(500).json({
             success: false,
             message: "An error occurred while fetching staking data.",
@@ -164,7 +165,7 @@ const addStakingData = async(req, res) => {
         });
     } catch (error) {
 
-        console.error("Error adding staking data:", error);
+        logger.error("Error adding staking data:", error);
 
         res.status(500).json({
             success: false,
@@ -210,7 +211,7 @@ const updateStakingData = async(req, res) => {
             updatedData: updatedStakingData,
         });
     } catch (error) {
-        console.error("Error updating staking data:", error);
+        logger.error("Error updating staking data:", error);
 
         res.status(500).json({
             success: false,
@@ -245,7 +246,7 @@ const deleteStakingData = async(req, res) => {
             deletedId: id,
         });
     } catch (error) {
-        console.error("Error deleting staking data:", error);
+        logger.error("Error deleting staking data:", error);
 
         res.status(500).json({
             success: false,

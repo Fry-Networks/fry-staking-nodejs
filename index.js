@@ -1,6 +1,8 @@
 require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const express = require("express");
+const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const logger = require("./config/logger");
 const swapHistoryRoute = require("./routes/UserSwapHistoryRoute");
 const stakerDataRoute = require("./routes/stackerDataRoute");
 const yieldFarmingRoute = require("./routes/yeildFarmingRoute");
@@ -21,9 +23,12 @@ const swapProxyRoute = require('./routes/swapProxyRoute');
 const rewardsRoute = require('./routes/rewardsRoute');
 
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const connectDB = require("./config/db");
 const app = express();
 app.set('trust proxy', 1);
+app.use(helmet());
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -33,7 +38,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(cors({
   origin: 'https://fry.farm',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'cache-control', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'cache-control'],
+  credentials: true,
 }));
 
 // Rate limiters
@@ -82,29 +88,29 @@ app.use("/yieldfarming", readLimiter, yieldFarmingRoute);
 app.use("/staking", readLimiter, stakingRoute);
 app.use("/token", readLimiter, TokenRoute);
 app.use('/stakingtoken', readLimiter, stakingTokenRoutes);
-app.use("/withdraw", readLimiter, withdrawRoutes);
-app.use("/claimreward", readLimiter, claimRewardRoute);
+app.use("/withdraw", writeLimiter, withdrawRoutes);
+app.use("/claimreward", writeLimiter, claimRewardRoute);
 app.use("/farming", readLimiter, farmingRoute);
 app.use("/stakingfarmingtoken", readLimiter, stackingFarmingTokenRoute);
-app.use("/farmingwithdraw", readLimiter, farmingWithdrawRoutes);
-app.use('/claimfarmrewards', readLimiter, claimFarmRewardRoutes);
+app.use("/farmingwithdraw", writeLimiter, farmingWithdrawRoutes);
+app.use('/claimfarmrewards', writeLimiter, claimFarmRewardRoutes);
 app.use('/gasfee', readLimiter, gasFeeRoutes);
-app.use("/user", readLimiter, userRoutes);
+app.use("/user", writeLimiter, userRoutes);
 app.use("/tokens", readLimiter, tokenDiscoveryRoute);
 app.use("/swap", readLimiter, swapProxyRoute);
-app.use("/rewards", readLimiter, rewardsRoute);
+app.use("/rewards", writeLimiter, rewardsRoute);
 
 // 404 handler for undefined routes
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: `Route ${req.method} ${req.originalUrl} not found`,
+    message: 'Not found',
   });
 });
 
 // Global error handler
 app.use((err, req, res, _next) => {
-  console.error("Unhandled error:", err);
+  logger.error("Unhandled error:", err);
   res.status(500).json({
     success: false,
     message: "Internal server error",
@@ -117,5 +123,5 @@ connectDB();
 // Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    logger.info(`Server running on port ${PORT}`);
 });

@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 const Token = require("../models/tokensSchema");
 
 function escapeRegex(str) {
@@ -18,7 +19,7 @@ const getAllTokens = async (req, res) => {
       data: tokens,
     });
   } catch (error) {
-    console.error("Error fetching all tokens:", error);
+    logger.error("Error fetching all tokens:", error);
     res.status(500).json({
       success: false,
       message: "An error occurred while fetching tokens.",
@@ -54,7 +55,7 @@ const addToken = async (req, res) => {
         data: newToken,
       });
     } catch (error) {
-      console.error("Error adding token:", error);
+      logger.error("Error adding token:", error);
       res.status(500).json({
         success: false,
         message: "An error occurred while adding the token.",
@@ -95,7 +96,7 @@ const addToken = async (req, res) => {
         data: updatedToken,
       });
     } catch (error) {
-      console.error("Error updating token:", error);
+      logger.error("Error updating token:", error);
       res.status(500).json({
         success: false,
         message: "An error occurred while updating the token.",
@@ -124,7 +125,7 @@ const deleteToken = async (req, res) => {
         deletedId: id,
       });
     } catch (error) {
-      console.error("Error deleting token:", error);
+      logger.error("Error deleting token:", error);
       res.status(500).json({
         success: false,
         message: "An error occurred while deleting the token.",
@@ -163,7 +164,7 @@ const searchTokenByName = async (req, res) => {
       data: tokens,
     });
   } catch (error) {
-    console.error("Error searching tokens by name:", error);
+    logger.error("Error searching tokens by name:", error);
     res.status(500).json({
       success: false,
       message: "An error occurred while searching tokens.",

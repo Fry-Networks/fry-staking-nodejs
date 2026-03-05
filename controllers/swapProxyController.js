@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 const axios = require('axios');
 
 const FOLKS_BASE = 'https://api.folksrouter.io/v1';
@@ -106,7 +107,7 @@ const proxyDeflexQuote = async (req, res) => {
 
     res.json({ success: true, quote });
   } catch (err) {
-    console.error('Deflex quote error:', err.message);
+    logger.error('Deflex quote error:', err.message);
     res.status(502).json({
       success: false,
       message: err.message || 'Deflex quote failed',
@@ -145,7 +146,7 @@ const proxyDeflexTransactions = async (req, res) => {
 
     res.json({ success: true, txns: serialized });
   } catch (err) {
-    console.error('Deflex transactions error:', err.message);
+    logger.error('Deflex transactions error:', err.message);
     res.status(502).json({
       success: false,
       message: err.message || 'Deflex transactions failed',

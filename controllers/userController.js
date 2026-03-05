@@ -1,7 +1,9 @@
+const logger = require("../config/logger");
 const User = require("../models/userSchema");
 const fs = require("fs");
 const path = require("path");
 const mime = require("mime-types");
+const { fromBuffer: fileTypeFromBuffer } = require("file-type");
 
 // Ensure uploads directory exists
 fs.mkdirSync(path.join(__dirname, "../uploads/avatars"), { recursive: true });
@@ -22,16 +24,24 @@ const createOrUpdateUser = async (req, res) => {
     const profileFile = Array.isArray(files.profilePicture) ? files.profilePicture[0] : undefined;
     const bannerFile = Array.isArray(files.banner) ? files.banner[0] : undefined;
 
+    const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
     if (profileFile) {
-      const ext = mime.extension(profileFile.mimetype) || "bin";
-      const filename = `${walletId}_profile_${Date.now()}.${ext}`;
+      const detected = await fileTypeFromBuffer(profileFile.buffer);
+      if (!detected || !ALLOWED_MIME_TYPES.includes(detected.mime)) {
+        return res.status(400).json({ success: false, message: "Invalid image file type for profile picture." });
+      }
+      const filename = `${walletId}_profile_${Date.now()}.${detected.ext}`;
       fs.writeFileSync(path.join(__dirname, "../uploads/avatars", filename), profileFile.buffer);
       profilePictureUrl = `/uploads/avatars/${filename}`;
     }
 
     if (bannerFile) {
-      const ext = mime.extension(bannerFile.mimetype) || "bin";
-      const filename = `${walletId}_banner_${Date.now()}.${ext}`;
+      const detected = await fileTypeFromBuffer(bannerFile.buffer);
+      if (!detected || !ALLOWED_MIME_TYPES.includes(detected.mime)) {
+        return res.status(400).json({ success: false, message: "Invalid image file type for banner." });
+      }
+      const filename = `${walletId}_banner_${Date.now()}.${detected.ext}`;
       fs.writeFileSync(path.join(__dirname, "../uploads/avatars", filename), bannerFile.buffer);
       bannerUrl = `/uploads/avatars/${filename}`;
     }
@@ -78,7 +88,7 @@ const createOrUpdateUser = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error("Error creating or updating user:", error);
+    logger.error("Error creating or updating user:", error);
     return res.status(500).json({
       success: false,
       message: "An error occurred while creating or updating the user.",
@@ -110,7 +120,7 @@ const getUserByWalletId = async (req, res) => {
       data: user,
     });
   } catch (error) {
-    console.error("Error fetching user:", error);
+    logger.error("Error fetching user:", error);
     return res.status(500).json({
       success: false,
       message: "An error occurred while fetching the user.",

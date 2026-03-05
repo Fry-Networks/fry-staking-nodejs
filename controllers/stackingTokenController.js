@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 // controllers/stakingTokenController.js
 const StakingToken = require("../models/stakingTokenSchema");
 const withdrawToken = require("../models/withdrawSchema");
@@ -63,7 +64,7 @@ const getStakingTokensByPoolId = async (req, res) => {
       data
     });
   } catch (error) {
-    console.error("Error fetching staking tokens by poolId:", error);
+    logger.error("Error fetching staking tokens by poolId:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch staking tokens",

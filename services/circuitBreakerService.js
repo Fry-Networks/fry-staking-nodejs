@@ -1,7 +1,6 @@
+const logger = require("../config/logger");
+const redis = require('../config/redis');
 const CircuitBreakerState = require('../models/circuitBreakerStateSchema');
-
-// Alert cooldown tracking
-let lastAlertTimes = { yellow: 0, orange: 0, red: 0 };
 
 /**
  * Check and update circuit breaker state
@@ -64,7 +63,7 @@ async function checkCircuitBreaker(config) {
       suspiciousThisHour: state.suspiciousClaimsThisHour,
       claimsToday: state.claimsToday,
       baseline,
-    }, config).catch(err => console.error('Alert send error:', err.message));
+    }, config).catch(err => logger.error('Alert send error:', err.message));
   }
 
   const allowed = newLevel !== 'red';
@@ -116,12 +115,15 @@ async function sendAlert(level, details, config) {
   if (!webhookUrl) return;
 
   // Cooldown: 5min yellow, 1min orange, immediate red
-  const cooldowns = { yellow: 5 * 60 * 1000, orange: 1 * 60 * 1000, red: 0 };
-  const cooldown = cooldowns[level] || 0;
-  const now = Date.now();
+  const cooldownsSec = { yellow: 300, orange: 60, red: 0 };
+  const cooldown = cooldownsSec[level] || 0;
 
-  if (now - lastAlertTimes[level] < cooldown) return;
-  lastAlertTimes[level] = now;
+  if (cooldown > 0) {
+    const key = `cb:alert:${level}`;
+    const exists = await redis.get(key);
+    if (exists) return;
+    await redis.set(key, '1', 'EX', cooldown);
+  }
 
   const colors = { yellow: 0xFFFF00, orange: 0xFF8C00, red: 0xFF0000 };
 
@@ -146,7 +148,7 @@ async function sendAlert(level, details, config) {
       body: JSON.stringify(embed),
     });
   } catch (err) {
-    console.error('Discord webhook error:', err.message);
+    logger.error('Discord webhook error:', err.message);
   }
 }
 
@@ -171,7 +173,7 @@ async function setPause(paused, reason, config) {
       baseline: config.baselineClaimsPerHour,
       action,
       reason,
-    }, config).catch(err => console.error('Pause alert error:', err.message));
+    }, config).catch(err => logger.error('Pause alert error:', err.message));
   }
 
   return state;

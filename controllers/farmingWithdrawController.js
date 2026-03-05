@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 const FarmingWithdraw = require("../models/withdrawFarmingTokenSchema");
 
 // Add a new farming token withdrawal log
@@ -24,7 +25,7 @@ const addFarmingWithdrawLog = async (req, res) => {
       data: saved,
     });
   } catch (error) {
-    console.error("Error saving farming token withdrawal log:", error);
+    logger.error("Error saving farming token withdrawal log:", error);
     res.status(500).json({
       success: false,
       message: "Failed to save farming token withdrawal log",
@@ -42,7 +43,7 @@ const getAllFarmingWithdrawals = async (req, res) => {
       data: logs,
     });
   } catch (error) {
-    console.error("Error fetching farming token withdrawal logs:", error);
+    logger.error("Error fetching farming token withdrawal logs:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch farming token withdrawal logs",
@@ -62,7 +63,7 @@ const getFarmingWithdrawalsByWallet = async (req, res) => {
       data: logs,
     });
   } catch (error) {
-    console.error("Error fetching farming token withdrawal logs by wallet:", error);
+    logger.error("Error fetching farming token withdrawal logs by wallet:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch farming token withdrawal logs by wallet",
@@ -82,7 +83,7 @@ const getFarmingWithdrawalsByPool = async (req, res) => {
       data: logs,
     });
   } catch (error) {
-    console.error("Error fetching farming withdrawal logs by pool:", error);
+    logger.error("Error fetching farming withdrawal logs by pool:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch farming withdrawal logs for pool",

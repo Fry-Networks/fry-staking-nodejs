@@ -1,3 +1,4 @@
+const logger = require("../config/logger");
 const Withdraw = require("../models/withdrawSchema");
 
 // Add a new withdrawal log
@@ -24,7 +25,7 @@ const addWithdrawLog = async (req, res) => {
       data: saved,
     });
   } catch (error) {
-    console.error("Error saving withdrawal log:", error);
+    logger.error("Error saving withdrawal log:", error);
     res.status(500).json({
       success: false,
       message: "Failed to save withdrawal log",
@@ -42,7 +43,7 @@ const getAllWithdrawals = async (req, res) => {
       data: logs,
     });
   } catch (error) {
-    console.error("Error fetching withdrawal logs:", error);
+    logger.error("Error fetching withdrawal logs:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch withdrawal logs",
@@ -62,7 +63,7 @@ const getWithdrawalsByWallet = async (req, res) => {
       data: logs,
     });
   } catch (error) {
-    console.error("Error fetching wallet logs:", error);
+    logger.error("Error fetching wallet logs:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch wallet logs",
@@ -82,7 +83,7 @@ const getWithdrawalsByPool = async (req, res) => {
       data: logs,
     });
   } catch (error) {
-    console.error("Error fetching pool withdrawal logs:", error);
+    logger.error("Error fetching pool withdrawal logs:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch withdrawal logs for pool",
