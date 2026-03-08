@@ -33,31 +33,39 @@ const requireAuth = (req, res, next) => {
 };
 
 /**
- * requireAdmin — Must be used AFTER requireAuth.
- * Checks req.user.wallet against ADMIN_WALLETS env var AND rewardsConfig.adminWallets from DB.
+ * checkIsAdmin — Returns true if the given wallet is in the admin list.
+ * Checks ADMIN_WALLETS env var AND rewardsConfig.adminWallets from DB.
  */
-const requireAdmin = async (req, res, next) => {
+async function checkIsAdmin(wallet) {
   const adminWallets = (process.env.ADMIN_WALLETS || '')
     .split(',')
     .map((w) => w.trim())
     .filter(Boolean);
 
-  if (!req.user) {
-    return res.status(403).json({ success: false, message: 'Admin access required' });
-  }
-
-  if (adminWallets.includes(req.user.wallet)) {
-    return next();
-  }
+  if (adminWallets.includes(wallet)) return true;
 
   try {
     const RewardsConfig = require('../models/rewardsConfigSchema');
     const config = await RewardsConfig.getConfig();
-    if (config.adminWallets && config.adminWallets.includes(req.user.wallet)) {
-      return next();
-    }
+    if (config.adminWallets && config.adminWallets.includes(wallet)) return true;
   } catch (_err) {
-    // DB check failed, fall through to deny
+    // DB check failed, fall through
+  }
+
+  return false;
+}
+
+/**
+ * requireAdmin — Must be used AFTER requireAuth.
+ * Checks req.user.wallet against ADMIN_WALLETS env var AND rewardsConfig.adminWallets from DB.
+ */
+const requireAdmin = async (req, res, next) => {
+  if (!req.user) {
+    return res.status(403).json({ success: false, message: 'Admin access required' });
+  }
+
+  if (await checkIsAdmin(req.user.wallet)) {
+    return next();
   }
 
   return res.status(403).json({ success: false, message: 'Admin access required' });
@@ -96,4 +104,4 @@ const requireRewardsAdmin = async (req, res, next) => {
   return res.status(403).json({ success: false, message: 'Rewards admin access required' });
 };
 
-module.exports = { requireAuth, requireAdmin, requireRewardsAdmin };
+module.exports = { requireAuth, requireAdmin, requireRewardsAdmin, checkIsAdmin };

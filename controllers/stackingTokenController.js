@@ -4,12 +4,38 @@ const StakingToken = require("../models/stakingTokenSchema");
 const withdrawToken = require("../models/withdrawSchema");
 const staking = require("../models/stakingSchema");
 const claimReward = require("../models/claimRewardSchema");
+const StakerData = require("../models/stakerDataSchema");
 
-// Create a new staking token
+// Create or update staking token (upsert by wallet + poolId)
 const addStakingToken = async (req, res) => {
   try {
-    const newToken = new StakingToken(req.body);
-    const savedToken = await newToken.save();
+    const { wallet, poolId, totalStaked } = req.body;
+
+    if (!wallet || !poolId) {
+      return res.status(400).json({ success: false, message: 'wallet and poolId are required' });
+    }
+    if (!totalStaked || totalStaked <= 0) {
+      return res.status(400).json({ success: false, message: 'totalStaked must be a positive number' });
+    }
+
+    const savedToken = await StakingToken.findOneAndUpdate(
+      { wallet, poolId },
+      {
+        $inc: { totalStaked: totalStaked },
+        $set: {
+          apr: req.body.apr,
+          lockPeriod: req.body.lockPeriod,
+          poolStartTime: req.body.poolStartTime,
+          poolEndTime: req.body.poolEndTime,
+          poolTime: req.body.poolTime,
+          rewardToken: req.body.rewardToken,
+          stakeTokens: req.body.stakeTokens,
+          appId: req.body.appId,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
     res.status(201).json({ success: true, data: savedToken });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to add staking token', error: error.message });
@@ -157,36 +183,46 @@ const getUserStakingStats = async (req, res) => {
   }
 
   try {
-    // Fetch all staking records by wallet
+    // 1. TVL: sum all pools' totalAmountStaked (already in standard units)
+    const allPools = await staking.find({});
+    const totalTVL = allPools.reduce((sum, p) => sum + (p.totalAmountStaked || 0), 0);
+
+    // 2. My Stakes: StakingToken (micro units) with StakerData fallback
     const stakingRecords = await StakingToken.find({ wallet });
-
-    // Calculate total staked amount (stored in microAlgos, convert to Algos)
-    const totalStaked = stakingRecords.reduce((sum, rec) => sum + ((rec.totalStaked || 0) / 1000000), 0);
-
-    // Fetch all withdrawal records by wallet
     const withdrawalRecords = await withdrawToken.find({ wallet });
+    // withdrawToken.tokens is stored in standard units (not micro)
+    const totalWithdrawn = withdrawalRecords.reduce((sum, rec) => sum + (rec.tokens || 0), 0);
 
-    // Calculate total withdrawn amount (same unit conversion as totalStaked)
-    const totalWithdrawn = withdrawalRecords.reduce((sum, rec) => sum + ((rec.tokens || 0) / 1000000), 0);
+    let myStake = 0;
+    if (stakingRecords.length > 0) {
+      const totalStaked = stakingRecords.reduce((sum, rec) => sum + (rec.totalStaked || 0), 0) / 1_000_000;
+      myStake = totalStaked - totalWithdrawn;
+    } else {
+      // Fallback: StakerData records (created on claim, micro units)
+      const stakerRecords = await StakerData.find({ walletId: wallet });
+      const stakerStaked = stakerRecords.reduce((sum, r) => sum + (r.stakedAmount || 0), 0) / 1_000_000;
+      myStake = stakerStaked - totalWithdrawn;
+    }
+    myStake = Math.max(myStake, 0);
 
-    // Final stake = totalStaked - totalWithdrawn
-    const activeStake = totalStaked - totalWithdrawn;
-
+    // 3. My Rewards: claimReward (micro units) with StakerData fallback
     const userRewards = await claimReward.find({ walletId: wallet });
-    const totalReward = userRewards.reduce((sum, rec) => sum + (rec.rewardClaimed || 0), 0);
+    let myReward = 0;
+    if (userRewards.length > 0) {
+      myReward = userRewards.reduce((sum, rec) => sum + (rec.rewardClaimed || 0), 0) / 1_000_000;
+    } else {
+      const stakerRecords = await StakerData.find({ walletId: wallet });
+      myReward = stakerRecords.reduce((sum, r) => sum + (r.rewardClaimed || 0), 0) / 1_000_000;
+    }
 
     res.status(200).json({
       success: true,
-      data: {
-        totalTVL: totalStaked,       
-        myStake: activeStake,
-        myReward: totalReward
-      }
+      data: { totalTVL, myStake, myReward }
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Failed to fetch user farming stats",
+      message: "Failed to fetch user staking stats",
       error: error.message
     });
   }

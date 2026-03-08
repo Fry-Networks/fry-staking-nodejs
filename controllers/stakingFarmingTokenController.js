@@ -64,10 +64,7 @@ const getStakingFarmingTokensByPoolId = async (req, res) => {
     const data = await StakingFarmingToken.find({ poolId }).sort({ createdAt: -1 });
 
     if (data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No records found for the given pool ID"
-      });
+      return res.status(200).json({ success: true, data: [] });
     }
 
     return res.status(200).json({ success: true, data }); // ✅ return here
@@ -135,14 +132,11 @@ const getPoolTokensAndWithdrawn = async (req, res) => {
     const records = await StakingFarmingToken.find({ poolId });
 
     if (!records.length) {
-      return res.status(404).json({
-        success: false,
-        message: "No staking records found for this user in the given pool"
-      });
+      return res.status(200).json({ success: true, totalBalance: 0 });
     }
 
     const totalStaked = records.reduce((sum, rec) => sum + (rec.stakedAmount || 0), 0);
-    
+
     const withdrawalRecords = await withdrawFarmingToken.find({ poolId });
     const totalWithdrawn = withdrawalRecords.reduce((sum, rec) => sum + (rec.amount || 0), 0);
     const updatedAmount = totalStaked - totalWithdrawn;
@@ -175,10 +169,7 @@ const getFarmingRecordsByAppId = async (req, res) => {
     const records = await Farming.find({ appId: Number(appId) }).sort({ createdAt: -1 });
 
     if (!records.length) {
-      return res.status(404).json({
-        success: false,
-        message: "No farming records found for the given appId"
-      });
+      return res.status(200).json({ success: true, data: [] });
     }
 
     res.status(200).json({
