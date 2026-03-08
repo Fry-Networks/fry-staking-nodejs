@@ -15,8 +15,31 @@ const gasFeeSchema = new mongoose.Schema(
       required: true,
     },
     gasType: {
-      type: String, // Amount in microAlgos or desired unit
+      type: String,
       required: true,
+    },
+    feePercent: {
+      type: Number,
+    },
+    feeType: {
+      type: String,
+      enum: ['flat', 'percentage'],
+      default: 'flat',
+    },
+    baseAmount: {
+      type: Number,
+    },
+    baseToken: {
+      type: String,
+    },
+    feeToken: {
+      type: String,
+    },
+    txId: {
+      type: String,
+    },
+    usdValue: {
+      type: Number,
     },
   },
   {

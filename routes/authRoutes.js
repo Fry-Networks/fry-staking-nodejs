@@ -3,9 +3,20 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const algosdk = require('algosdk');
 const logger = require('../config/logger');
+const { withFallback } = require('../services/algodService');
 const redis = require('../config/redis');
+const rateLimit = require('express-rate-limit');
+const { checkIsAdmin } = require('../middleware/auth');
 
 const router = express.Router();
+
+const authLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many auth attempts, please try again later' },
+});
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const NONCE_TTL_SEC = 5 * 60; // 5 minutes
@@ -15,7 +26,7 @@ const NONCE_TTL_SEC = 5 * 60; // 5 minutes
  * Body: { wallet: "ALGO_ADDRESS" }
  * Returns: { nonce: "hex_string" }
  */
-router.post('/nonce', async (req, res) => {
+router.post('/nonce', authLimiter, async (req, res) => {
   const { wallet } = req.body;
   if (!wallet || typeof wallet !== 'string') {
     return res.status(400).json({ success: false, message: 'wallet is required' });
@@ -44,7 +55,7 @@ router.post('/nonce', async (req, res) => {
  *   2. The note contains the expected nonce
  *   3. The signature is valid (via Algorand simulate API, supports rekeyed accounts)
  */
-router.post('/verify', async (req, res) => {
+router.post('/verify', authLimiter, async (req, res) => {
   const { wallet, signedTxn, nonce } = req.body;
 
   if (!wallet || !signedTxn || !nonce) {
@@ -80,14 +91,15 @@ router.post('/verify', async (req, res) => {
 
     // Verify signature via Algorand simulate API
     // This correctly handles rekeyed accounts and SDK encoding differences
-    const algodClient = new algosdk.Algodv2('', 'https://mainnet-api.4160.nodely.dev', 443);
     const simRequest = new algosdk.modelsv2.SimulateRequest({
       txnGroups: [
         new algosdk.modelsv2.SimulateRequestTransactionGroup({ txns: [decoded] })
       ],
       allowEmptySignatures: false,
     });
-    const simResult = await algodClient.simulateTransactions(simRequest).do();
+    const simResult = await withFallback(async (client) => {
+      return await client.simulateTransactions(simRequest).do();
+    });
     const groupFailure = simResult.txnGroups[0].failureMessage;
 
     if (groupFailure) {
@@ -122,15 +134,15 @@ router.post('/logout', (req, res) => {
  * GET /auth/me
  * Returns auth status (checks cookie validity).
  */
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   const token = req.cookies?.fry_token;
   if (!token) {
     return res.json({ success: true, authenticated: false });
   }
   try {
-    const jwt = require('jsonwebtoken');
     const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
-    return res.json({ success: true, authenticated: true, wallet: decoded.wallet });
+    const isAdmin = await checkIsAdmin(decoded.wallet);
+    return res.json({ success: true, authenticated: true, wallet: decoded.wallet, isAdmin });
   } catch (_err) {
     res.clearCookie('fry_token', { path: '/' });
     return res.json({ success: true, authenticated: false });

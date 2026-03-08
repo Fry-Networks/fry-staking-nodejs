@@ -192,6 +192,25 @@ const rewardsConfigUpdateSchema = Joi.object({
   indexerUrl: Joi.string(),
 }).min(1);
 
+// Fee config update schema (partial update)
+const feeConfigUpdateSchema = Joi.object({
+  stakingDepositFeePercent: Joi.number().min(0).max(50),
+  stakingWithdrawFeePercent: Joi.number().min(0).max(50),
+  stakingClaimFeePercent: Joi.number().min(0).max(50),
+  farmingDepositFeePercent: Joi.number().min(0).max(50),
+  farmingWithdrawFeePercent: Joi.number().min(0).max(50),
+  farmingClaimFeePercent: Joi.number().min(0).max(50),
+  swapFeePercent: Joi.number().min(0).max(50),
+  dailyClaimFeePercent: Joi.number().min(0).max(50),
+  poolCreationFeePercent: Joi.number().min(0).max(50),
+  poolCreationFeeUsd: Joi.number().min(0).max(1000),
+  feeRecipient: Joi.string(),
+  revShareStakers: Joi.number().min(0).max(100),
+  revShareTreasury: Joi.number().min(0).max(100),
+  revSharePoolCreator: Joi.number().min(0).max(100),
+  revShareCompound: Joi.number().min(0).max(100),
+}).min(1);
+
 // Admin ban schema
 const adminBanSchema = Joi.object({
   wallet: Joi.string().required(),
@@ -213,4 +232,5 @@ module.exports = {
   dailyRewardClaimSchema,
   rewardsConfigUpdateSchema,
   adminBanSchema,
+  feeConfigUpdateSchema,
 };

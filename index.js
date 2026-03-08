@@ -21,6 +21,8 @@ const authRoutes = require('./routes/authRoutes');
 const tokenDiscoveryRoute = require('./routes/tokenDiscoveryRoute');
 const swapProxyRoute = require('./routes/swapProxyRoute');
 const rewardsRoute = require('./routes/rewardsRoute');
+const feeConfigRoutes = require('./routes/feeConfigRoutes');
+const eventRoutes = require('./routes/eventRoutes');
 
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -45,18 +47,10 @@ app.use(cors({
 // Rate limiters
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests, please try again later' },
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 50,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many auth attempts, please try again later' },
 });
 
 const writeLimiter = rateLimit({
@@ -78,8 +72,19 @@ const readLimiter = rateLimit({
 // Apply global rate limit
 app.use(globalLimiter);
 
+// Prevent CDN and browser caching of API responses
+app.use((req, res, next) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store',
+  });
+  next();
+});
+
 // Auth routes (with stricter rate limit)
-app.use('/auth', authLimiter, authRoutes);
+app.use('/auth', authRoutes);
 
 // Routes use readLimiter (300/15min) — write endpoints are already protected by requireAuth middleware
 app.use("/swaphistory", readLimiter, swapHistoryRoute);
@@ -89,16 +94,18 @@ app.use("/staking", readLimiter, stakingRoute);
 app.use("/token", readLimiter, TokenRoute);
 app.use('/stakingtoken', readLimiter, stakingTokenRoutes);
 app.use("/withdraw", writeLimiter, withdrawRoutes);
-app.use("/claimreward", writeLimiter, claimRewardRoute);
+app.use("/claimreward", readLimiter, claimRewardRoute);
 app.use("/farming", readLimiter, farmingRoute);
 app.use("/stakingfarmingtoken", readLimiter, stackingFarmingTokenRoute);
 app.use("/farmingwithdraw", writeLimiter, farmingWithdrawRoutes);
-app.use('/claimfarmrewards', writeLimiter, claimFarmRewardRoutes);
+app.use('/claimfarmrewards', readLimiter, claimFarmRewardRoutes);
 app.use('/gasfee', readLimiter, gasFeeRoutes);
-app.use("/user", writeLimiter, userRoutes);
+app.use("/user", readLimiter, userRoutes);
 app.use("/tokens", readLimiter, tokenDiscoveryRoute);
 app.use("/swap", readLimiter, swapProxyRoute);
-app.use("/rewards", writeLimiter, rewardsRoute);
+app.use("/rewards", readLimiter, rewardsRoute);
+app.use("/feeconfig", readLimiter, feeConfigRoutes);
+app.use("/events", readLimiter, eventRoutes);
 
 // 404 handler for undefined routes
 app.use((req, res) => {
@@ -119,6 +126,9 @@ app.use((err, req, res, _next) => {
 
 // Connect to MongoDB
 connectDB();
+
+// Start cron jobs
+require('./crons/eventPointsCron');
 
 // Start the server
 const PORT = process.env.PORT || 5000;
