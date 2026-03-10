@@ -1,5 +1,7 @@
 const logger = require("../config/logger");
 const Farming = require("../models/farmingSchema");
+const StakingFarmingToken = require("../models/stakingFarmingTokenSchema");
+const FarmingWithdraw = require("../models/withdrawFarmingTokenSchema");
 
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -16,12 +18,37 @@ const getAllFarmingData = async (req, res) => {
 
     const farmingData = await Farming.find(query);
 
+    // Aggregate totalStaked from individual staking/withdrawal records
+    const [stakeAgg, withdrawAgg] = await Promise.all([
+      StakingFarmingToken.aggregate([
+        { $group: { _id: '$poolId', total: { $sum: '$stakedAmount' } } }
+      ]),
+      FarmingWithdraw.aggregate([
+        { $group: { _id: '$poolId', total: { $sum: '$amount' } } }
+      ]),
+    ]);
+
+    const stakeMap = {};
+    for (const s of stakeAgg) stakeMap[s._id] = s.total;
+    const withdrawMap = {};
+    for (const w of withdrawAgg) withdrawMap[w._id] = w.total;
+
+    const enriched = farmingData.map(p => {
+      const doc = p.toObject();
+      const poolId = String(doc.appId);
+      const staked = stakeMap[poolId] || 0;
+      const withdrawn = withdrawMap[poolId] || 0;
+      // Convert human units to micro-units (frontend divides by 1M)
+      doc.totalStaked = Math.round(Math.max(0, staked - withdrawn) * 1_000_000);
+      return doc;
+    });
+
     res.status(200).json({
       success: true,
-      message: farmingData.length === 0
+      message: enriched.length === 0
         ? (tokenName ? `No farming data found for token: ${tokenName}` : "No farming data found.")
         : "Farming data fetched successfully.",
-      data: farmingData,
+      data: enriched,
     });
   } catch (error) {
     logger.error("Error fetching farming data:", error);

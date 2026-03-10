@@ -1,6 +1,10 @@
 const logger = require("../config/logger");
 const WalletStreak = require('../models/walletStreakSchema');
 const DailyClaim = require('../models/dailyClaimSchema');
+const StakingToken = require('../models/stakingTokenSchema');
+const StakingFarmingToken = require('../models/stakingFarmingTokenSchema');
+const Staking = require('../models/stakingSchema');
+const Farming = require('../models/farmingSchema');
 
 // In-memory caches with TTL
 const walletInfoCache = new Map();   // 10min TTL
@@ -234,6 +238,14 @@ async function checkEligibility(wallet, ip, fingerprint, config) {
     }
     addCheck('ban_check', true);
 
+    // 1b. Active position check (must stake or farm in a live pool)
+    const hasPosition = await hasActivePosition(wallet);
+    if (!hasPosition) {
+      addCheck('active_position', false, 'Stake or farm any amount to unlock daily FRY rewards');
+      return { eligible: false, checks, trustScore: 0, trustTier: 0, reasons, suspicionFlags };
+    }
+    addCheck('active_position', true);
+
     // 2. Claim cooldown
     if (streak && streak.lastClaimAt) {
       const hoursSinceClaim = (Date.now() - streak.lastClaimAt.getTime()) / (1000 * 60 * 60);
@@ -354,4 +366,46 @@ async function checkEligibility(wallet, ip, fingerprint, config) {
   }
 }
 
-module.exports = { checkEligibility };
+/**
+ * Check if wallet has any active stake/farm in a LIVE pool.
+ * Live = stakingEndTime (or farmEndTime) > now (UNIX seconds).
+ */
+async function hasActivePosition(wallet) {
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  // 1. Check staking: find live pools, then check if wallet has a record in any
+  const liveStakingPools = await Staking.find(
+    { stakingEndTime: { $gt: nowSec } },
+    { _id: 1 }
+  ).lean();
+
+  if (liveStakingPools.length > 0) {
+    const livePoolIds = liveStakingPools.map(p => p._id.toString());
+    const hasStake = await StakingToken.exists({
+      wallet: wallet,
+      poolId: { $in: livePoolIds },
+      totalStaked: { $gt: 0 },
+    });
+    if (hasStake) return true;
+  }
+
+  // 2. Check farming: find live farms, then check if wallet has a record in any
+  const liveFarmingPools = await Farming.find(
+    { farmEndTime: { $gt: nowSec } },
+    { _id: 1 }
+  ).lean();
+
+  if (liveFarmingPools.length > 0) {
+    const liveFarmIds = liveFarmingPools.map(p => p._id.toString());
+    const hasFarm = await StakingFarmingToken.exists({
+      wallet: wallet,
+      poolId: { $in: liveFarmIds },
+      stakedAmount: { $gt: 0 },
+    });
+    if (hasFarm) return true;
+  }
+
+  return false;
+}
+
+module.exports = { checkEligibility, hasActivePosition };

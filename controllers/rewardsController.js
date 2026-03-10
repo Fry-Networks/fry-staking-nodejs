@@ -99,6 +99,15 @@ const getRewardsStatus = async (req, res) => {
       }
     }
 
+    // Active position check (must stake or farm in a live pool)
+    let hasPosition = true;
+    try {
+      hasPosition = await antiSybil.hasActivePosition(wallet);
+      if (!hasPosition) canClaim = false;
+    } catch (err) {
+      logger.warn('hasActivePosition check failed:', err.message);
+    }
+
     // Circuit breaker level
     const cbState = await circuitBreaker.checkCircuitBreaker(config);
 
@@ -122,6 +131,7 @@ const getRewardsStatus = async (req, res) => {
         totalClaims,
         rewardSchedule: config.rewardSchedule,
         circuitBreakerLevel: cbState.level,
+        hasActivePosition: hasPosition,
       },
     });
   } catch (err) {

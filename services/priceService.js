@@ -86,11 +86,11 @@ async function fetchTinymanAssetPrice(asaId) {
 
 async function fetchVestigePrice(asaId) {
   const res = await axios.get(
-    `https://free-api.vestige.fi/asset/${asaId}/price`,
-    { timeout: 5000 }
+    `https://api.vestigelabs.org/assets/price`,
+    { params: { asset_ids: asaId, denominating_asset_id: USDC_ID }, timeout: 5000 }
   );
-  const price = parseFloat(res.data?.price ?? '0');
-  if (!(price > 0)) throw new Error(`invalid price: ${res.data?.price}`);
+  const price = parseFloat(res.data?.[0]?.price ?? '0');
+  if (!(price > 0)) throw new Error(`invalid price: ${JSON.stringify(res.data)}`);
   return price;
 }
 

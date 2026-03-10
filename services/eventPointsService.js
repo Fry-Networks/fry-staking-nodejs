@@ -62,7 +62,7 @@ async function calcStakingVolume(challenge, event, poolTokenMap) {
       continue;
     }
 
-    const usdValue = rec.totalStaked * price;
+    const usdValue = (rec.totalStaked / 1_000_000) * price;
     if (challenge.config?.minAmount && usdValue < challenge.config.minAmount) continue;
 
     const wallet = rec.wallet;
@@ -157,7 +157,7 @@ async function calcStakingProfit(challenge, event, poolTokenMap) {
       continue;
     }
 
-    const usdValue = rec.rewardClaimed * price;
+    const usdValue = (rec.rewardClaimed / 1_000_000) * price;
     if (challenge.config?.minAmount && usdValue < challenge.config.minAmount) continue;
 
     const wallet = rec.walletId;
