@@ -196,13 +196,20 @@ const updateStakingData = async(req, res) => {
         const newTotalStakers = currentTotalStakers + (totalStakers || 0);
 
 
+        const { totalAmountStaked, ...otherUpdatedData } = updatedData;
+        const updateOperation = {
+            $set: {
+                ...otherUpdatedData,
+                totalStakers: newTotalStakers,
+            },
+        };
+        if (totalAmountStaked !== undefined && !isNaN(totalAmountStaked)) {
+            updateOperation.$inc = { totalAmountStaked: totalAmountStaked };
+        }
         const updatedStakingData = await Staking.findByIdAndUpdate(
-            id, {
-                $set: {
-                    ...updatedData,
-                    totalStakers: newTotalStakers,
-                },
-            }, { new: true, runValidators: true }
+            id,
+            updateOperation,
+            { new: true, runValidators: true }
         );
 
         res.status(200).json({

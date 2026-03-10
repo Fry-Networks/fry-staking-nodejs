@@ -7,6 +7,8 @@ const WalletStreak = require('../models/walletStreakSchema');
 const DailyClaim = require('../models/dailyClaimSchema');
 const antiSybil = require('../services/antiSybilService');
 const circuitBreaker = require('../services/circuitBreakerService');
+const FeeConfig = require('../models/feeConfigSchema');
+const GasFee = require('../models/gasFeeSchema');
 
 // Rekeyed wallet signing setup (deferred — rewards endpoints will fail gracefully if mnemonics are missing)
 let ogAccount, rekeyAccount, treasuryAddr, signingKey;
@@ -18,7 +20,7 @@ try {
 } catch (err) {
   logger.warn('REWARD_MNEMONIC/REWARD_REKEY not configured — reward claiming will be unavailable:', err.message);
 }
-const algodClient = new algosdk.Algodv2('', 'https://mainnet-api.4160.nodely.dev', 443);
+const { withFallback, getAlgodClient } = require('../services/algodService');
 
 /**
  * Verify Cloudflare Turnstile CAPTCHA token.
@@ -81,6 +83,11 @@ const getRewardsStatus = async (req, res) => {
     const multiplier = config.trustTierMultipliers[Math.min(trustTier, config.trustTierMultipliers.length - 1)];
     const estimatedReward = Math.floor(nextReward * multiplier);
 
+    // Fee info
+    const feeConfig = await FeeConfig.getFeeConfig();
+    const dailyFeePercent = feeConfig ? (feeConfig.dailyClaimFeePercent || 0) : 0;
+    const estimatedRewardAfterFee = Math.floor(estimatedReward * (100 - dailyFeePercent) / 100);
+
     // Cooldown info
     let canClaim = true;
     let cooldownRemaining = 0;
@@ -90,6 +97,15 @@ const getRewardsStatus = async (req, res) => {
         canClaim = false;
         cooldownRemaining = Math.ceil((config.claimCooldownHours - hoursSinceClaim) * 60);
       }
+    }
+
+    // Active position check (must stake or farm in a live pool)
+    let hasPosition = true;
+    try {
+      hasPosition = await antiSybil.hasActivePosition(wallet);
+      if (!hasPosition) canClaim = false;
+    } catch (err) {
+      logger.warn('hasActivePosition check failed:', err.message);
     }
 
     // Circuit breaker level
@@ -104,6 +120,8 @@ const getRewardsStatus = async (req, res) => {
         maxStreak: config.rewardSchedule.length,
         nextReward,
         estimatedReward,
+        estimatedRewardAfterFee,
+        feePercent: dailyFeePercent,
         trustTier,
         multiplier,
         canClaim,
@@ -113,6 +131,7 @@ const getRewardsStatus = async (req, res) => {
         totalClaims,
         rewardSchedule: config.rewardSchedule,
         circuitBreakerLevel: cbState.level,
+        hasActivePosition: hasPosition,
       },
     });
   } catch (err) {
@@ -127,6 +146,19 @@ const getRewardsStatus = async (req, res) => {
  */
 const claimReward = async (req, res) => {
   try {
+    // Temporary diagnostic logging to identify which header Bunny CDN sends with real client IP
+    console.log('[Claim IP Debug]', JSON.stringify({
+      reqIp: req.ip,
+      xForwardedFor: req.headers['x-forwarded-for'],
+      xRealIp: req.headers['x-real-ip'],
+      cfConnectingIp: req.headers['cf-connecting-ip'],
+      trueClientIp: req.headers['true-client-ip'],
+      xClientIp: req.headers['x-client-ip'],
+      forwardedFor: req.headers['forwarded'],
+      remoteAddress: req.connection?.remoteAddress || req.socket?.remoteAddress,
+      allHeaders: Object.keys(req.headers).filter(h => h.includes('ip') || h.includes('forward') || h.includes('client') || h.includes('real') || h.includes('bunny') || h.includes('cdn'))
+    }));
+
     const { fingerprint, turnstileToken } = req.body;
     const wallet = req.user.wallet;
     const ip = req.ip || req.connection.remoteAddress;
@@ -185,28 +217,51 @@ const claimReward = async (req, res) => {
     const trustMultiplier = config.trustTierMultipliers[Math.min(eligibility.trustTier, config.trustTierMultipliers.length - 1)];
     const actualReward = Math.floor(baseReward * trustMultiplier);
 
-    if (actualReward <= 0) {
-      return res.status(403).json({ success: false, message: 'Reward amount is zero due to trust level' });
+    // Fetch daily claim fee percentage
+    const feeConfig = await FeeConfig.getFeeConfig();
+    const dailyFeePercent = feeConfig ? (feeConfig.dailyClaimFeePercent || 0) : 0;
+    const feeAmount = Math.floor(actualReward * dailyFeePercent / 100);
+    const netReward = actualReward - feeAmount;
+
+    if (netReward <= 0) {
+      return res.status(403).json({ success: false, message: 'Reward amount is zero after fee deduction' });
     }
 
     // Convert to microFRY (6 decimals)
-    const microAmount = actualReward * 1e6;
+    const microAmount = netReward * 1e6;
 
-    // Sign and submit ASA transfer
-    const params = await algodClient.getTransactionParams().do();
-    const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-      sender: treasuryAddr,
-      receiver: wallet,
-      amount: microAmount,
-      assetIndex: config.fryAsaId,
-      suggestedParams: params,
+    // Sign and submit ASA transfer (with node fallback)
+    const { txId } = await withFallback(async (client) => {
+      const params = await client.getTransactionParams().do();
+      const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+        sender: treasuryAddr,
+        receiver: wallet,
+        amount: microAmount,
+        assetIndex: config.fryAsaId,
+        suggestedParams: params,
+      });
+
+      const signedTxn = txn.signTxn(signingKey);
+      const { txid } = await client.sendRawTransaction(signedTxn).do();
+
+      // Wait for confirmation (up to 4 rounds)
+      await algosdk.waitForConfirmation(client, txid, 4);
+      return { txId: txid };
     });
 
-    const signedTxn = txn.signTxn(signingKey);
-    const { txid: txId } = await algodClient.sendRawTransaction(signedTxn).do();
-
-    // Wait for confirmation (up to 4 rounds)
-    await algosdk.waitForConfirmation(algodClient, txId, 4);
+    // Log daily claim fee (fire-and-forget)
+    if (feeAmount > 0) {
+      GasFee.create({
+        appId: 0,
+        userId: wallet,
+        gasAmount: feeAmount,
+        gasType: 'dailyClaim',
+        feeType: 'percentage',
+        feePercent: dailyFeePercent,
+        baseAmount: actualReward,
+        txId,
+      }).catch(err => logger.error('Failed to log daily claim fee:', err.message));
+    }
 
     // Record claim in DB (unique index catches race conditions)
     const today = new Date();
@@ -237,7 +292,7 @@ const claimReward = async (req, res) => {
     // Update streak
     streak.currentStreak = currentStreak + 1;
     streak.lastClaimAt = new Date();
-    streak.totalClaimed += actualReward;
+    streak.totalClaimed += netReward;
     streak.totalClaims += 1;
     streak.trustScore = eligibility.trustScore;
     streak.trustTier = eligibility.trustTier;
@@ -250,11 +305,13 @@ const claimReward = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Claimed ${actualReward} FRY!`,
+      message: `Claimed ${netReward} FRY!`,
       data: {
         txId,
-        actualReward,
+        actualReward: netReward,
         baseReward,
+        feeAmount,
+        feePercent: dailyFeePercent,
         trustTier: eligibility.trustTier,
         multiplier: trustMultiplier,
         streakDay: streakDay + 1,
