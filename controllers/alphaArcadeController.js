@@ -1,0 +1,453 @@
+const logger = require("../config/logger");
+const AlphaArcadePool = require("../models/alphaArcadePoolSchema");
+const AlphaArcadePosition = require("../models/alphaArcadePositionSchema");
+const alphaArcadeService = require("../services/alphaArcadeService");
+
+// GET /markets — list all live markets from Alpha Arcade API
+const getMarkets = async (req, res) => {
+  try {
+    const markets = await alphaArcadeService.getMarkets();
+    res.status(200).json({
+      success: true,
+      message: "Markets fetched successfully.",
+      data: markets,
+    });
+  } catch (error) {
+    logger.error("Error fetching Alpha Arcade markets:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while fetching markets.",
+      error: error.message,
+    });
+  }
+};
+
+// GET /markets/rewards — list reward markets
+const getRewardMarkets = async (req, res) => {
+  try {
+    const markets = await alphaArcadeService.getRewardMarkets();
+    res.status(200).json({
+      success: true,
+      message: "Reward markets fetched successfully.",
+      data: markets,
+    });
+  } catch (error) {
+    logger.error("Error fetching Alpha Arcade reward markets:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while fetching reward markets.",
+      error: error.message,
+    });
+  }
+};
+
+// GET /markets/:marketAppId — single market detail
+const getMarketDetail = async (req, res) => {
+  const { marketAppId } = req.params;
+  try {
+    const market = await alphaArcadeService.getMarket(marketAppId);
+    if (!market) {
+      return res.status(404).json({
+        success: false,
+        message: `Market ${marketAppId} not found.`,
+      });
+    }
+    res.status(200).json({
+      success: true,
+      message: "Market detail fetched successfully.",
+      data: market,
+    });
+  } catch (error) {
+    logger.error(`Error fetching Alpha Arcade market ${marketAppId}:`, error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while fetching market detail.",
+      error: error.message,
+    });
+  }
+};
+
+// GET /orderbook/:marketAppId — full orderbook
+const getOrderbook = async (req, res) => {
+  const { marketAppId } = req.params;
+  try {
+    const orderbook = await alphaArcadeService.getOrderbook(marketAppId);
+    res.status(200).json({
+      success: true,
+      message: "Orderbook fetched successfully.",
+      data: orderbook,
+    });
+  } catch (error) {
+    logger.error(`Error fetching Alpha Arcade orderbook ${marketAppId}:`, error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while fetching orderbook.",
+      error: error.message,
+    });
+  }
+};
+
+// GET /pools — list all pools
+const getAllPools = async (req, res) => {
+  try {
+    const pools = await AlphaArcadePool.find({}).sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      message: pools.length === 0
+        ? "No Alpha Arcade pools found."
+        : "Alpha Arcade pools fetched successfully.",
+      data: pools,
+    });
+  } catch (error) {
+    logger.error("Error fetching Alpha Arcade pools:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while fetching pools.",
+      error: error.message,
+    });
+  }
+};
+
+// GET /pool/:poolId — single pool
+const getPoolById = async (req, res) => {
+  const { poolId } = req.params;
+  try {
+    const pool = await AlphaArcadePool.findById(poolId);
+    if (!pool) {
+      return res.status(404).json({
+        success: false,
+        message: `Pool ${poolId} not found.`,
+      });
+    }
+    res.status(200).json({
+      success: true,
+      message: "Pool fetched successfully.",
+      data: pool,
+    });
+  } catch (error) {
+    logger.error(`Error fetching Alpha Arcade pool ${poolId}:`, error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while fetching pool.",
+      error: error.message,
+    });
+  }
+};
+
+// POST /pool/create — admin override pool creation
+const createPool = async (req, res) => {
+  try {
+    const poolData = { ...req.body };
+    if (!poolData.creatorId) poolData.creatorId = 'system';
+    const pool = await AlphaArcadePool.create(poolData);
+    res.status(201).json({
+      success: true,
+      message: "Alpha Arcade pool created successfully.",
+      data: pool,
+    });
+  } catch (error) {
+    logger.error("Error creating Alpha Arcade pool:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while creating pool.",
+      error: error.message,
+    });
+  }
+};
+
+// PUT /pool/update/:poolId — admin pool update
+const updatePool = async (req, res) => {
+  const { poolId } = req.params;
+  const updatedData = req.body;
+
+  try {
+    const pool = await AlphaArcadePool.findById(poolId);
+    if (!pool) {
+      return res.status(404).json({
+        success: false,
+        message: `Pool ${poolId} not found.`,
+      });
+    }
+
+    const updated = await AlphaArcadePool.findByIdAndUpdate(
+      poolId,
+      { $set: updatedData },
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Pool ${poolId} updated successfully.`,
+      data: updated,
+    });
+  } catch (error) {
+    logger.error(`Error updating Alpha Arcade pool ${poolId}:`, error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while updating pool.",
+      error: error.message,
+    });
+  }
+};
+
+// POST /build-deposit — build unsigned deposit transactions
+const buildDeposit = async (req, res) => {
+  const { wallet, marketAppId, usdcAmount, spread } = req.body;
+
+  try {
+    // Auto-create pool if needed
+    const pool = await alphaArcadeService.getOrCreatePool(marketAppId);
+
+    if (!pool.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: "This market pool is no longer active.",
+      });
+    }
+
+    const spreadBps = spread || pool.spreadBps;
+
+    const result = await alphaArcadeService.buildDepositTxns({
+      wallet,
+      marketAppId: Number(marketAppId),
+      usdcAmount: Number(usdcAmount),
+      spreadBps: spreadBps,
+      yesAsaId: pool.yesAsaId,
+      noAsaId: pool.noAsaId,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Deposit transactions built successfully.",
+      data: {
+        ...result,
+        poolId: pool._id.toString(),
+        marketAppId: pool.marketAppId,
+      },
+    });
+  } catch (error) {
+    logger.error("Error building Alpha Arcade deposit:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while building deposit transactions.",
+      error: error.message,
+    });
+  }
+};
+
+// POST /build-withdraw — build unsigned withdraw transactions
+const buildWithdraw = async (req, res) => {
+  const { wallet, poolId } = req.body;
+
+  try {
+    const pool = await AlphaArcadePool.findById(poolId);
+    if (!pool) {
+      return res.status(404).json({
+        success: false,
+        message: `Pool ${poolId} not found.`,
+      });
+    }
+
+    // Get user's active position to find escrow app IDs
+    const position = await AlphaArcadePosition.findOne({
+      wallet,
+      poolId,
+      status: 'active',
+    });
+
+    if (!position) {
+      return res.status(404).json({
+        success: false,
+        message: "No active position found for this wallet and pool.",
+      });
+    }
+
+    const escrowAppIds = [...position.yesEscrowAppIds, ...position.noEscrowAppIds];
+
+    const result = await alphaArcadeService.buildWithdrawTxns({
+      wallet,
+      marketAppId: pool.marketAppId,
+      matcherAppId: pool.matcherAppId,
+      escrowAppIds,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Withdraw transactions built successfully.",
+      data: {
+        ...result,
+        poolId: pool._id.toString(),
+        positionId: position._id.toString(),
+      },
+    });
+  } catch (error) {
+    logger.error("Error building Alpha Arcade withdraw:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while building withdraw transactions.",
+      error: error.message,
+    });
+  }
+};
+
+// POST /record-deposit — record a confirmed deposit
+const recordDeposit = async (req, res) => {
+  const {
+    wallet, marketAppId, poolId, usdcDeposited,
+    yesEscrowAppIds, noEscrowAppIds, spreadUsed, entryMidPrice, txId,
+  } = req.body;
+
+  try {
+    const pool = await AlphaArcadePool.findById(poolId);
+    if (!pool) {
+      return res.status(404).json({
+        success: false,
+        message: `Pool ${poolId} not found.`,
+      });
+    }
+
+    const position = await AlphaArcadePosition.create({
+      wallet,
+      poolId,
+      marketAppId: Number(marketAppId),
+      usdcDeposited: Number(usdcDeposited),
+      yesEscrowAppIds: yesEscrowAppIds || [],
+      noEscrowAppIds: noEscrowAppIds || [],
+      spreadUsed: Number(spreadUsed || 0),
+      entryMidPrice: Number(entryMidPrice || 0),
+      status: 'active',
+    });
+
+    // Update pool totals
+    await AlphaArcadePool.findByIdAndUpdate(poolId, {
+      $inc: { totalProviders: 1, totalUsdcDeposited: Number(usdcDeposited) },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Deposit recorded successfully.",
+      data: position,
+    });
+  } catch (error) {
+    logger.error("Error recording Alpha Arcade deposit:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while recording deposit.",
+      error: error.message,
+    });
+  }
+};
+
+// POST /record-withdraw — record a confirmed withdrawal
+const recordWithdraw = async (req, res) => {
+  const {
+    wallet, poolId, positionId, usdcRecovered,
+    remainingYesTokens, remainingNoTokens, txId,
+  } = req.body;
+
+  try {
+    const position = await AlphaArcadePosition.findById(positionId);
+    if (!position) {
+      return res.status(404).json({
+        success: false,
+        message: `Position ${positionId} not found.`,
+      });
+    }
+
+    if (position.wallet !== wallet) {
+      return res.status(403).json({
+        success: false,
+        message: "Wallet does not match position owner.",
+      });
+    }
+
+    position.status = 'withdrawn';
+    position.withdrawnAt = new Date();
+    position.usdcRecovered = Number(usdcRecovered || 0);
+    position.remainingYesTokens = Number(remainingYesTokens || 0);
+    position.remainingNoTokens = Number(remainingNoTokens || 0);
+    await position.save();
+
+    // Decrement pool totals
+    await AlphaArcadePool.findByIdAndUpdate(poolId || position.poolId, {
+      $inc: {
+        totalProviders: -1,
+        totalUsdcDeposited: -position.usdcDeposited,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Withdrawal recorded successfully.",
+      data: position,
+    });
+  } catch (error) {
+    logger.error("Error recording Alpha Arcade withdrawal:", error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while recording withdrawal.",
+      error: error.message,
+    });
+  }
+};
+
+// GET /positions/:wallet — all positions for a wallet
+const getPositionsByWallet = async (req, res) => {
+  const { wallet } = req.params;
+  try {
+    const positions = await AlphaArcadePosition.find({ wallet }).sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      message: positions.length === 0
+        ? "No positions found for this wallet."
+        : "Positions fetched successfully.",
+      data: positions,
+    });
+  } catch (error) {
+    logger.error(`Error fetching Alpha Arcade positions for ${wallet}:`, error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while fetching positions.",
+      error: error.message,
+    });
+  }
+};
+
+// GET /position/:wallet/:poolId — specific position
+const getPositionByWalletAndPool = async (req, res) => {
+  const { wallet, poolId } = req.params;
+  try {
+    const positions = await AlphaArcadePosition.find({ wallet, poolId }).sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      message: positions.length === 0
+        ? "No position found for this wallet and pool."
+        : "Position fetched successfully.",
+      data: positions,
+    });
+  } catch (error) {
+    logger.error(`Error fetching Alpha Arcade position for ${wallet}/${poolId}:`, error);
+    res.status(500).json({
+      success: false,
+      message: "An error occurred while fetching position.",
+      error: error.message,
+    });
+  }
+};
+
+module.exports = {
+  getMarkets,
+  getRewardMarkets,
+  getMarketDetail,
+  getOrderbook,
+  getAllPools,
+  getPoolById,
+  createPool,
+  updatePool,
+  buildDeposit,
+  buildWithdraw,
+  recordDeposit,
+  recordWithdraw,
+  getPositionsByWallet,
+  getPositionByWalletAndPool,
+};

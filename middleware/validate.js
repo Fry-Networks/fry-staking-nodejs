@@ -271,6 +271,88 @@ const nftClaimSchema = Joi.object({
   feeAmount: Joi.number().default(0),
 });
 
+// Alpha Arcade pool creation schema (admin override)
+const alphaArcadePoolSchema = Joi.object({
+  creatorId: Joi.string().default('system'),
+  marketAppId: Joi.number().required(),
+  matcherAppId: Joi.number().default(3078581851),
+  marketQuestion: Joi.string().allow('').default(''),
+  marketCategory: Joi.string().allow('').default(''),
+  marketImageUrl: Joi.string().allow('').default(''),
+  marketResolutionTime: Joi.number().default(0),
+  yesAsaId: Joi.number().default(0),
+  noAsaId: Joi.number().default(0),
+  usdcAsaId: Joi.number().default(31566704),
+  spreadBps: Joi.number().min(0).max(10000).default(50),
+  rewardToken: Joi.object({
+    id: Joi.string().allow('').default(''),
+    name: Joi.string().allow('').default(''),
+  }).default({}),
+  rewardTokenAmount: Joi.number().default(0),
+  poolStartTime: Joi.number().default(0),
+  poolEndTime: Joi.number().default(0),
+  duration: Joi.number().default(0),
+  aprRate: Joi.number().default(0),
+  lockPeriod: Joi.number().default(0),
+  isActive: Joi.boolean().default(true),
+});
+
+// Alpha Arcade pool update schema (partial)
+const alphaArcadePoolUpdateSchema = Joi.object({
+  spreadBps: Joi.number().min(0).max(10000),
+  rewardToken: Joi.object({
+    id: Joi.string().allow(''),
+    name: Joi.string().allow(''),
+  }),
+  rewardTokenAmount: Joi.number(),
+  poolStartTime: Joi.number(),
+  poolEndTime: Joi.number(),
+  duration: Joi.number(),
+  aprRate: Joi.number(),
+  lockPeriod: Joi.number(),
+  isActive: Joi.boolean(),
+  isResolved: Joi.boolean(),
+  resolutionOutcome: Joi.string().valid('yes', 'no', null),
+}).min(1);
+
+// Alpha Arcade build deposit schema
+const alphaArcadeBuildDepositSchema = Joi.object({
+  wallet: Joi.string().required(),
+  marketAppId: Joi.number().required(),
+  usdcAmount: Joi.number().min(1000000).required(),
+  spread: Joi.number().min(0).max(10000).optional(),
+});
+
+// Alpha Arcade build withdraw schema
+const alphaArcadeBuildWithdrawSchema = Joi.object({
+  wallet: Joi.string().required(),
+  poolId: Joi.string().required(),
+});
+
+// Alpha Arcade record deposit schema
+const alphaArcadeRecordDepositSchema = Joi.object({
+  wallet: Joi.string().required(),
+  marketAppId: Joi.number().required(),
+  poolId: Joi.string().required(),
+  usdcDeposited: Joi.number().required(),
+  yesEscrowAppIds: Joi.array().items(Joi.number()).default([]),
+  noEscrowAppIds: Joi.array().items(Joi.number()).default([]),
+  spreadUsed: Joi.number().default(0),
+  entryMidPrice: Joi.number().default(0),
+  txId: Joi.string().required(),
+});
+
+// Alpha Arcade record withdraw schema
+const alphaArcadeRecordWithdrawSchema = Joi.object({
+  wallet: Joi.string().required(),
+  poolId: Joi.string().optional(),
+  positionId: Joi.string().required(),
+  usdcRecovered: Joi.number().default(0),
+  remainingYesTokens: Joi.number().default(0),
+  remainingNoTokens: Joi.number().default(0),
+  txId: Joi.string().required(),
+});
+
 module.exports = {
   validate,
   stakingSchema,
@@ -291,4 +373,10 @@ module.exports = {
   nftStakeSchema,
   nftUnstakeSchema,
   nftClaimSchema,
+  alphaArcadePoolSchema,
+  alphaArcadePoolUpdateSchema,
+  alphaArcadeBuildDepositSchema,
+  alphaArcadeBuildWithdrawSchema,
+  alphaArcadeRecordDepositSchema,
+  alphaArcadeRecordWithdrawSchema,
 };
