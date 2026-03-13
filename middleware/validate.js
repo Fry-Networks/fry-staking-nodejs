@@ -42,6 +42,7 @@ const stakingSchema = Joi.object({
     minNftCount: Joi.number().min(1).default(1),
     gateMessage: Joi.string().allow('').default('This pool requires an NFT to participate.'),
   }).default({}),
+  contractVersion: Joi.number().default(1),
 });
 
 // Farming pool creation schema
@@ -217,6 +218,59 @@ const adminBanSchema = Joi.object({
   reason: Joi.string().optional().allow(''),
 });
 
+// NFT staking pool creation schema
+const nftStakingPoolSchema = Joi.object({
+  creatorId: Joi.string().required(),
+  appId: Joi.number().required(),
+  name: Joi.string().required(),
+  description: Joi.string().allow('').default(''),
+  imageUrl: Joi.string().allow('').default(''),
+  rewardTokenId: Joi.number().required(),
+  rewardModel: Joi.string().valid('fixed_rate', 'proportional', 'apr').required(),
+  collectionMode: Joi.string().valid('creator_address', 'whitelist', 'both').required(),
+  collectionCreator: Joi.string().allow('').default(''),
+  whitelistedAsaIds: Joi.array().items(Joi.number()).default([]),
+  collectionName: Joi.string().allow('').default(''),
+  nftValueInRewardToken: Joi.number().default(0),
+  ratePerDay: Joi.number().default(0),
+  totalRewardPool: Joi.number().default(0),
+  aprRate: Joi.number().default(0),
+  valuePerNft: Joi.number().default(0),
+  poolEndTime: Joi.number().default(0),
+  lockPeriod: Joi.number().default(0),
+  depositFeeBps: Joi.number().min(0).max(10000).default(0),
+  withdrawFeeBps: Joi.number().min(0).max(10000).default(0),
+  claimFeeBps: Joi.number().min(0).max(10000).default(0),
+  feeRecipient: Joi.string().allow('').default(''),
+});
+
+// NFT stake schema
+const nftStakeSchema = Joi.object({
+  wallet: Joi.string().required(),
+  poolId: Joi.string().required(),
+  appId: Joi.number().required(),
+  nftAsaId: Joi.number().required(),
+  nftName: Joi.string().allow('').default(''),
+  nftImageUrl: Joi.string().allow('').default(''),
+});
+
+// NFT unstake schema
+const nftUnstakeSchema = Joi.object({
+  wallet: Joi.string().required(),
+  appId: Joi.number().required(),
+  nftAsaId: Joi.number().required(),
+});
+
+// NFT claim schema
+const nftClaimSchema = Joi.object({
+  wallet: Joi.string().required(),
+  poolId: Joi.string().required(),
+  appId: Joi.number().required(),
+  rewardClaimed: Joi.number().required(),
+  txId: Joi.string().required(),
+  feeAmount: Joi.number().default(0),
+});
+
 module.exports = {
   validate,
   stakingSchema,
@@ -233,4 +287,8 @@ module.exports = {
   rewardsConfigUpdateSchema,
   adminBanSchema,
   feeConfigUpdateSchema,
+  nftStakingPoolSchema,
+  nftStakeSchema,
+  nftUnstakeSchema,
+  nftClaimSchema,
 };
