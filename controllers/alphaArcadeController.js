@@ -2,6 +2,7 @@ const logger = require("../config/logger");
 const AlphaArcadePool = require("../models/alphaArcadePoolSchema");
 const AlphaArcadePosition = require("../models/alphaArcadePositionSchema");
 const alphaArcadeService = require("../services/alphaArcadeService");
+const FeeConfig = require("../models/feeConfigSchema");
 
 // GET /markets — list all live markets from Alpha Arcade API
 const getMarkets = async (req, res) => {
@@ -216,13 +217,29 @@ const buildDeposit = async (req, res) => {
 
     const spreadBps = spread || pool.spreadBps;
 
+    // Calculate deposit fee
+    const feeConfig = await FeeConfig.getFeeConfig();
+    const feeBps = feeConfig.alphaArcadeDepositFeePercent * 100;
+    const numericUsdcAmount = Number(usdcAmount);
+    const feeMicro = Math.floor(numericUsdcAmount * feeBps / 10000);
+    const netAmount = numericUsdcAmount - feeMicro;
+
+    if (netAmount < 1_000_000) {
+      return res.status(400).json({
+        success: false,
+        message: `After the ${feeConfig.alphaArcadeDepositFeePercent}% platform fee, net deposit would be below 1 USDC minimum. Please deposit at least ${((1_000_000 / (1 - feeBps / 10000)) / 1_000_000).toFixed(2)} USDC.`,
+      });
+    }
+
     const result = await alphaArcadeService.buildDepositTxns({
       wallet,
       marketAppId: Number(marketAppId),
-      usdcAmount: Number(usdcAmount),
+      usdcAmount: netAmount,
       spreadBps: spreadBps,
       yesAsaId: pool.yesAsaId,
       noAsaId: pool.noAsaId,
+      feeWallet: feeConfig.feeRecipient,
+      feeMicro,
     });
 
     res.status(200).json({
@@ -232,6 +249,9 @@ const buildDeposit = async (req, res) => {
         ...result,
         poolId: pool._id.toString(),
         marketAppId: pool.marketAppId,
+        fee: feeMicro,
+        netAmount,
+        feePercent: feeConfig.alphaArcadeDepositFeePercent,
       },
     });
   } catch (error) {
@@ -273,11 +293,18 @@ const buildWithdraw = async (req, res) => {
 
     const escrowAppIds = [...position.yesEscrowAppIds, ...position.noEscrowAppIds];
 
+    // Calculate withdrawal fee
+    const feeConfig = await FeeConfig.getFeeConfig();
+    const feeBps = feeConfig.alphaArcadeWithdrawFeePercent * 100;
+    const feeMicro = Math.floor(position.usdcDeposited * feeBps / 10000);
+
     const result = await alphaArcadeService.buildWithdrawTxns({
       wallet,
       marketAppId: pool.marketAppId,
       matcherAppId: pool.matcherAppId,
       escrowAppIds,
+      feeWallet: feeConfig.feeRecipient,
+      feeMicro,
     });
 
     res.status(200).json({
@@ -287,6 +314,8 @@ const buildWithdraw = async (req, res) => {
         ...result,
         poolId: pool._id.toString(),
         positionId: position._id.toString(),
+        fee: feeMicro,
+        feePercent: feeConfig.alphaArcadeWithdrawFeePercent,
       },
     });
   } catch (error) {
@@ -304,6 +333,7 @@ const recordDeposit = async (req, res) => {
   const {
     wallet, marketAppId, poolId, usdcDeposited,
     yesEscrowAppIds, noEscrowAppIds, spreadUsed, entryMidPrice, txId,
+    depositFee,
   } = req.body;
 
   try {
@@ -325,6 +355,7 @@ const recordDeposit = async (req, res) => {
       spreadUsed: Number(spreadUsed || 0),
       entryMidPrice: Number(entryMidPrice || 0),
       status: 'active',
+      feesPaid: { depositFee: Number(depositFee || 0) },
     });
 
     // Update pool totals
@@ -352,6 +383,7 @@ const recordWithdraw = async (req, res) => {
   const {
     wallet, poolId, positionId, usdcRecovered,
     remainingYesTokens, remainingNoTokens, txId,
+    withdrawFee,
   } = req.body;
 
   try {
@@ -375,6 +407,8 @@ const recordWithdraw = async (req, res) => {
     position.usdcRecovered = Number(usdcRecovered || 0);
     position.remainingYesTokens = Number(remainingYesTokens || 0);
     position.remainingNoTokens = Number(remainingNoTokens || 0);
+    position.feesPaid = position.feesPaid || {};
+    position.feesPaid.withdrawFee = Number(withdrawFee || 0);
     await position.save();
 
     // Decrement pool totals

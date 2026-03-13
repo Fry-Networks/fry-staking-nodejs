@@ -20,6 +20,10 @@ const alphaArcadePositionSchema = new mongoose.Schema({
   usdcRecovered:       { type: Number, default: 0 },
   remainingYesTokens:  { type: Number, default: 0 },
   remainingNoTokens:   { type: Number, default: 0 },
+  feesPaid: {
+    depositFee:      { type: Number, default: 0 },
+    withdrawFee:     { type: Number, default: 0 },
+  },
 }, { timestamps: true });
 
 alphaArcadePositionSchema.index({ wallet: 1, status: 1 });

@@ -181,7 +181,7 @@ async function getOrCreatePool(marketAppId) {
  * Build unsigned deposit transactions (split shares + limit orders).
  * Returns base64-encoded unsigned transaction bytes.
  */
-async function buildDepositTxns({ wallet, marketAppId, usdcAmount, spreadBps, yesAsaId, noAsaId }) {
+async function buildDepositTxns({ wallet, marketAppId, usdcAmount, spreadBps, yesAsaId, noAsaId, feeWallet, feeMicro }) {
   const algodClient = getAlgodClient();
   const numericMarketAppId = Number(marketAppId);
   const spread = spreadBps || DEFAULT_SPREAD_BPS;
@@ -238,6 +238,17 @@ async function buildDepositTxns({ wallet, marketAppId, usdcAmount, spreadBps, ye
     onComplete: algosdk.OnApplicationComplete.NoOpOC,
   }));
 
+  // 4. Fee transfer (if applicable)
+  if (feeMicro > 0 && feeWallet) {
+    txns.push(algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+      sender: wallet,
+      receiver: feeWallet,
+      assetIndex: USDC_ASA_ID,
+      amount: feeMicro,
+      suggestedParams,
+    }));
+  }
+
   // Assign group ID
   if (txns.length > 1) {
     algosdk.assignGroupID(txns);
@@ -255,6 +266,7 @@ async function buildDepositTxns({ wallet, marketAppId, usdcAmount, spreadBps, ye
     spreadBps: spread,
     midPrice,
     spreadOffset,
+    fee: feeMicro || 0,
   };
 }
 
@@ -262,7 +274,7 @@ async function buildDepositTxns({ wallet, marketAppId, usdcAmount, spreadBps, ye
  * Build unsigned withdraw transactions (cancel orders + merge shares).
  * Returns base64-encoded unsigned transaction bytes.
  */
-async function buildWithdrawTxns({ wallet, marketAppId, matcherAppId, escrowAppIds }) {
+async function buildWithdrawTxns({ wallet, marketAppId, matcherAppId, escrowAppIds, feeWallet, feeMicro }) {
   const algodClient = getAlgodClient();
   const numericMarketAppId = Number(marketAppId);
   const effectiveMatcherAppId = matcherAppId || MATCHER_APP_ID;
@@ -288,6 +300,17 @@ async function buildWithdrawTxns({ wallet, marketAppId, matcherAppId, escrowAppI
     }));
   }
 
+  // 2. Fee transfer (if applicable)
+  if (feeMicro > 0 && feeWallet) {
+    txns.push(algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+      sender: wallet,
+      receiver: feeWallet,
+      assetIndex: USDC_ASA_ID,
+      amount: feeMicro,
+      suggestedParams,
+    }));
+  }
+
   // Assign group ID
   if (txns.length > 1) {
     algosdk.assignGroupID(txns);
@@ -298,6 +321,7 @@ async function buildWithdrawTxns({ wallet, marketAppId, matcherAppId, escrowAppI
     yesAsaId,
     noAsaId,
     matcherAppId: effectiveMatcherAppId,
+    fee: feeMicro || 0,
   };
 }
 

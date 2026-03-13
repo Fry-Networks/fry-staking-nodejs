@@ -12,6 +12,10 @@ const feeConfigSchema = new mongoose.Schema(
     farmingWithdrawFeePercent: { type: Number, default: 0.25 },
     farmingClaimFeePercent: { type: Number, default: 8.0 },
 
+    // Alpha Arcade LP fees
+    alphaArcadeDepositFeePercent: { type: Number, default: 0.5 },
+    alphaArcadeWithdrawFeePercent: { type: Number, default: 0.25 },
+
     // Swap fee
     swapFeePercent: { type: Number, default: 0.1 },
 

@@ -201,6 +201,8 @@ const feeConfigUpdateSchema = Joi.object({
   farmingDepositFeePercent: Joi.number().min(0).max(50),
   farmingWithdrawFeePercent: Joi.number().min(0).max(50),
   farmingClaimFeePercent: Joi.number().min(0).max(50),
+  alphaArcadeDepositFeePercent: Joi.number().min(0).max(50),
+  alphaArcadeWithdrawFeePercent: Joi.number().min(0).max(50),
   swapFeePercent: Joi.number().min(0).max(50),
   dailyClaimFeePercent: Joi.number().min(0).max(50),
   poolCreationFeePercent: Joi.number().min(0).max(50),
@@ -340,6 +342,7 @@ const alphaArcadeRecordDepositSchema = Joi.object({
   spreadUsed: Joi.number().default(0),
   entryMidPrice: Joi.number().default(0),
   txId: Joi.string().required(),
+  depositFee: Joi.number().default(0),
 });
 
 // Alpha Arcade record withdraw schema
@@ -351,6 +354,7 @@ const alphaArcadeRecordWithdrawSchema = Joi.object({
   remainingYesTokens: Joi.number().default(0),
   remainingNoTokens: Joi.number().default(0),
   txId: Joi.string().required(),
+  withdrawFee: Joi.number().default(0),
 });
 
 module.exports = {
