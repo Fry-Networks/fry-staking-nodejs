@@ -88,6 +88,10 @@ const stakingSchema = new mongoose.Schema({
     },
     default: {},
   },
+  contractVersion: {
+    type: Number,
+    default: 1,
+  },
 });
 
 

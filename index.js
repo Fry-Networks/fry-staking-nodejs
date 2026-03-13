@@ -23,6 +23,7 @@ const swapProxyRoute = require('./routes/swapProxyRoute');
 const rewardsRoute = require('./routes/rewardsRoute');
 const feeConfigRoutes = require('./routes/feeConfigRoutes');
 const eventRoutes = require('./routes/eventRoutes');
+const nftStakingRoute = require('./routes/nftStakingRoute');
 
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -106,6 +107,7 @@ app.use("/swap", readLimiter, swapProxyRoute);
 app.use("/rewards", readLimiter, rewardsRoute);
 app.use("/feeconfig", readLimiter, feeConfigRoutes);
 app.use("/events", readLimiter, eventRoutes);
+app.use("/nftstaking", readLimiter, nftStakingRoute);
 
 // 404 handler for undefined routes
 app.use((req, res) => {
