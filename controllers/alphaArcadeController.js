@@ -205,6 +205,15 @@ const buildDeposit = async (req, res) => {
       });
     }
 
+    // Block deposits to markets resolving within 6 hours
+    const resTime = pool.marketResolutionTime;
+    if (resTime > 0 && resTime * 1000 - Date.now() < 6 * 3600000) {
+      return res.status(400).json({
+        success: false,
+        message: 'This market resolves within 6 hours. Deposits are disabled for safety.',
+      });
+    }
+
     const spreadBps = spread || pool.spreadBps;
 
     const result = await alphaArcadeService.buildDepositTxns({
@@ -252,7 +261,7 @@ const buildWithdraw = async (req, res) => {
     const position = await AlphaArcadePosition.findOne({
       wallet,
       poolId,
-      status: 'active',
+      status: { $in: ['active', 'pending_withdrawal'] },
     });
 
     if (!position) {
@@ -435,6 +444,22 @@ const getPositionByWalletAndPool = async (req, res) => {
   }
 };
 
+// POST /admin/check-resolutions — manually trigger resolution check
+const adminCheckResolutions = async (req, res) => {
+  try {
+    const { checkResolutions } = require('../crons/alphaArcadeResolutionCron');
+    const results = await checkResolutions();
+    res.json({ success: true, message: 'Resolution check complete', data: results });
+  } catch (error) {
+    logger.error('Error running admin resolution check:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while running resolution check.',
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getMarkets,
   getRewardMarkets,
@@ -450,4 +475,5 @@ module.exports = {
   recordWithdraw,
   getPositionsByWallet,
   getPositionByWalletAndPool,
+  adminCheckResolutions,
 };

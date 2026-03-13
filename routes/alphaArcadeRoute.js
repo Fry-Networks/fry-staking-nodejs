@@ -26,6 +26,7 @@ const {
   recordWithdraw,
   getPositionsByWallet,
   getPositionByWalletAndPool,
+  adminCheckResolutions,
 } = require('../controllers/alphaArcadeController');
 
 // Market data routes (public)
@@ -47,6 +48,9 @@ router.post('/build-withdraw', requireAuth, validate(alphaArcadeBuildWithdrawSch
 // Record routes (authenticated)
 router.post('/record-deposit', requireAuth, validate(alphaArcadeRecordDepositSchema), recordDeposit);
 router.post('/record-withdraw', requireAuth, validate(alphaArcadeRecordWithdrawSchema), recordWithdraw);
+
+// Admin routes
+router.post('/admin/check-resolutions', requireAuth, requireAdmin, adminCheckResolutions);
 
 // Position routes (public)
 router.get('/positions/:wallet', getPositionsByWallet);

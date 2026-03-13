@@ -133,6 +133,7 @@ connectDB();
 
 // Start cron jobs
 require('./crons/eventPointsCron');
+require('./crons/alphaArcadeResolutionCron');
 
 // Start the server
 const PORT = process.env.PORT || 5000;

@@ -155,7 +155,7 @@ async function getOrCreatePool(marketAppId) {
 
   const yesAsaId = globalState.yes_asset_id || 0;
   const noAsaId = globalState.no_asset_id || 0;
-  const resolutionTime = marketData.resolutionTime || marketData.resolution_time || 0;
+  const resolutionTime = marketData.endTs || marketData.resolutionTime || marketData.resolution_time || 0;
 
   pool = await AlphaArcadePool.create({
     creatorId: 'system',
@@ -301,6 +301,29 @@ async function buildWithdrawTxns({ wallet, marketAppId, matcherAppId, escrowAppI
   };
 }
 
+/**
+ * Get the resolution time for a market, with pool cache + live API fallback.
+ */
+async function getResolutionTime(marketAppId) {
+  const pool = await AlphaArcadePool.findOne({ marketAppId: Number(marketAppId) });
+  if (pool?.marketResolutionTime > 0) return pool.marketResolutionTime;
+
+  // Fallback: fetch from live API
+  let market;
+  try {
+    market = await getMarket(marketAppId);
+  } catch {
+    return 0;
+  }
+  const endTs = market?.endTs || 0;
+
+  // Backfill the pool if found
+  if (pool && endTs > 0) {
+    await AlphaArcadePool.updateOne({ _id: pool._id }, { $set: { marketResolutionTime: endTs } });
+  }
+  return endTs;
+}
+
 module.exports = {
   getReadClient,
   getMarkets,
@@ -308,6 +331,7 @@ module.exports = {
   getRewardMarkets,
   getOrderbook,
   getOrCreatePool,
+  getResolutionTime,
   buildDepositTxns,
   buildWithdrawTxns,
 };
