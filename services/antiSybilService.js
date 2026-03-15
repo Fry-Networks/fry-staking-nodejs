@@ -405,6 +405,15 @@ async function hasActivePosition(wallet) {
     if (hasFarm) return true;
   }
 
+  // 3. Check Alpha Arcade positions
+  const AlphaArcadePosition = require('../models/alphaArcadePositionSchema');
+  const hasAAPosition = await AlphaArcadePosition.exists({
+    wallet: wallet,
+    status: 'active',
+    usdcDeposited: { $gt: 0 },
+  });
+  if (hasAAPosition) return true;
+
   return false;
 }
 

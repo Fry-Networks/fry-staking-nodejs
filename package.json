@@ -12,6 +12,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@algorandfoundation/algokit-utils": "^9.2.0",
+    "@alpha-arcade/sdk": "^0.3.0",
     "@aws-sdk/client-s3": "^3.894.0",
     "@deflex/deflex-sdk-js": "^2.0.5",
     "algosdk": "^3.5.2",

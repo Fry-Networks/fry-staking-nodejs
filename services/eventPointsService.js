@@ -9,6 +9,8 @@ const DailyClaim = require("../models/dailyClaimSchema");
 const ClaimReward = require("../models/claimRewardSchema");
 const ClaimFarmRewards = require("../models/claimFarmRewardsSchema");
 const UserSwapHistory = require("../models/userSwapHistorySchema");
+const NftStakedToken = require("../models/nftStakedTokenSchema");
+const AlphaArcadePosition = require("../models/alphaArcadePositionSchema");
 const Staking = require("../models/stakingSchema");
 const Farming = require("../models/farmingSchema");
 const { getAsaUsdPrice } = require("./priceService");
@@ -259,6 +261,35 @@ async function calcHoldDuration(challenge, event) {
   return walletPoints;
 }
 
+async function calcNftStakingVolume(challenge, event) {
+  const dateFilter = { stakedAt: { $gte: event.startDate, $lte: event.endDate } };
+  const poolFilter = challenge.config?.specificPoolIds?.length
+    ? { poolId: { $in: challenge.config.specificPoolIds } }
+    : {};
+  const records = await NftStakedToken.find({ ...dateFilter, ...poolFilter }).lean();
+
+  const walletPoints = {};
+  for (const rec of records) {
+    const wallet = rec.wallet;
+    walletPoints[wallet] = (walletPoints[wallet] || 0) + 1 * challenge.pointsMultiplier;
+  }
+  return walletPoints;
+}
+
+async function calcPredictionLpVolume(challenge, event) {
+  const dateFilter = { createdAt: { $gte: event.startDate, $lte: event.endDate } };
+  const records = await AlphaArcadePosition.find(dateFilter).lean();
+
+  const walletPoints = {};
+  for (const rec of records) {
+    const usdValue = (rec.usdcDeposited || 0) / 1_000_000;
+    if (challenge.config?.minAmount && usdValue < challenge.config.minAmount) continue;
+    const wallet = rec.wallet;
+    walletPoints[wallet] = (walletPoints[wallet] || 0) + usdValue * challenge.pointsMultiplier;
+  }
+  return walletPoints;
+}
+
 const CALCULATORS = {
   staking_volume: (c, e, m) => calcStakingVolume(c, e, m),
   farming_volume: (c, e, m) => calcFarmingVolume(c, e, m),
@@ -267,6 +298,8 @@ const CALCULATORS = {
   farming_profit: (c, e, m) => calcFarmingProfit(c, e, m),
   daily_claim_streak: (c, e) => calcDailyClaimStreak(c, e),
   hold_duration: (c, e) => calcHoldDuration(c, e),
+  nft_staking_volume: (c, e) => calcNftStakingVolume(c, e),
+  prediction_lp_volume: (c, e) => calcPredictionLpVolume(c, e),
 };
 
 async function calculatePointsForEvent(eventId) {
