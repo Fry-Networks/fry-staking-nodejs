@@ -26,6 +26,8 @@ const eventRoutes = require('./routes/eventRoutes');
 const nftStakingRoute = require('./routes/nftStakingRoute');
 const alphaArcadeRoute = require('./routes/alphaArcadeRoute');
 const communityEventRoutes = require('./routes/communityEventRoutes');
+const deviceStakingRoutes = require('./routes/deviceStakingRoutes');
+const deviceAccessRoutes = require('./routes/deviceAccessRoutes');
 
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -114,6 +116,8 @@ app.use("/prediction-lp", readLimiter, alphaArcadeRoute);
 // Backward compatibility
 app.use("/alpha-arcade", (req, res) => res.redirect(301, `/prediction-lp${req.url}`));
 app.use("/community-events", readLimiter, communityEventRoutes);
+app.use("/devicestaking", readLimiter, deviceStakingRoutes);
+app.use("/device-access", readLimiter, deviceAccessRoutes);
 
 // 404 handler for undefined routes
 app.use((req, res) => {
@@ -138,6 +142,7 @@ connectDB();
 // Start cron jobs
 require('./crons/eventPointsCron');
 require('./crons/alphaArcadeResolutionCron');
+require('./crons/deviceVerificationCron');
 
 // Start the server
 const PORT = process.env.PORT || 5000;
