@@ -18,6 +18,8 @@ const challengeSchema = new mongoose.Schema({
       'daily_claim_streak',
       'hold_duration',
       'referral',
+      'nft_staking_volume',
+      'prediction_lp_volume',
     ],
   },
   name: {

@@ -3,6 +3,8 @@ const AlphaArcadePool = require("../models/alphaArcadePoolSchema");
 const AlphaArcadePosition = require("../models/alphaArcadePositionSchema");
 const alphaArcadeService = require("../services/alphaArcadeService");
 const FeeConfig = require("../models/feeConfigSchema");
+const Staking = require("../models/stakingSchema");
+const Farming = require("../models/farmingSchema");
 
 // GET /markets — list all live markets from Alpha Arcade API
 const getMarkets = async (req, res) => {
@@ -256,9 +258,14 @@ const buildDeposit = async (req, res) => {
     });
   } catch (error) {
     logger.error("Error building Alpha Arcade deposit:", error);
-    res.status(500).json({
+    const isNotFound = error.message && error.message.includes('not found');
+    const status = isNotFound ? 400 : 500;
+    const message = isNotFound
+      ? "The requested market could not be found."
+      : "An error occurred while building deposit transactions.";
+    res.status(status).json({
       success: false,
-      message: "An error occurred while building deposit transactions.",
+      message,
       error: error.message,
     });
   }
@@ -298,14 +305,28 @@ const buildWithdraw = async (req, res) => {
     const feeBps = feeConfig.alphaArcadeWithdrawFeePercent * 100;
     const feeMicro = Math.floor(position.usdcDeposited * feeBps / 10000);
 
-    const result = await alphaArcadeService.buildWithdrawTxns({
-      wallet,
-      marketAppId: pool.marketAppId,
-      matcherAppId: pool.matcherAppId,
-      escrowAppIds,
-      feeWallet: feeConfig.feeRecipient,
-      feeMicro,
-    });
+    let result;
+
+    if (escrowAppIds.length > 0) {
+      // Path A: Has escrows — cancel orders (existing flow)
+      result = await alphaArcadeService.buildWithdrawTxns({
+        wallet,
+        marketAppId: pool.marketAppId,
+        matcherAppId: pool.matcherAppId,
+        escrowAppIds,
+        feeWallet: feeConfig.feeRecipient,
+        feeMicro,
+      });
+    } else {
+      // Path B: No escrows — merge YES+NO shares back to USDC
+      result = await alphaArcadeService.buildMergeSharesTxns({
+        wallet,
+        marketAppId: pool.marketAppId,
+        amount: position.usdcDeposited,
+        feeWallet: feeConfig.feeRecipient,
+        feeMicro,
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -494,6 +515,62 @@ const adminCheckResolutions = async (req, res) => {
   }
 };
 
+// GET /stats — aggregate stats for the Prediction LP page
+const getStats = async (req, res) => {
+  try {
+    const positionStats = await AlphaArcadePosition.aggregate([
+      { $match: { status: 'active' } },
+      { $group: {
+        _id: null,
+        totalUsdcDeposited: { $sum: '$usdcDeposited' },
+        totalPositions: { $sum: 1 },
+        uniqueWallets: { $addToSet: '$wallet' },
+      }},
+    ]);
+    const activePools = await AlphaArcadePool.countDocuments({ isActive: true });
+    const stats = positionStats[0] || { totalUsdcDeposited: 0, totalPositions: 0, uniqueWallets: [] };
+    res.json({
+      success: true,
+      data: {
+        tvl: stats.totalUsdcDeposited,
+        totalProviders: (stats.uniqueWallets || []).length,
+        totalPositions: stats.totalPositions,
+        activePools,
+      },
+    });
+  } catch (err) {
+    logger.error('Error fetching Alpha Arcade stats:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// GET /admin/platform-stats — aggregate stats across all farm types for admin dashboard
+const getPlatformStats = async (req, res) => {
+  try {
+    const [stakingPools, farmingPools, aaStats] = await Promise.all([
+      Staking.aggregate([{ $group: { _id: null, totalStakers: { $sum: '$totalStakers' } } }]),
+      Farming.aggregate([{ $group: { _id: null, totalFarmers: { $sum: '$totalFarmers' } } }]),
+      AlphaArcadePosition.aggregate([
+        { $match: { status: 'active' } },
+        { $group: { _id: null, count: { $sum: 1 }, wallets: { $addToSet: '$wallet' }, tvl: { $sum: '$usdcDeposited' } } },
+      ]),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        activeStaking: stakingPools[0]?.totalStakers || 0,
+        activeFarming: farmingPools[0]?.totalFarmers || 0,
+        activePredictions: aaStats[0]?.count || 0,
+        predictionProviders: (aaStats[0]?.wallets || []).length,
+        predictionTvl: aaStats[0]?.tvl || 0,
+      },
+    });
+  } catch (err) {
+    logger.error('Error fetching platform stats:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   getMarkets,
   getRewardMarkets,
@@ -510,4 +587,6 @@ module.exports = {
   getPositionsByWallet,
   getPositionByWalletAndPool,
   adminCheckResolutions,
+  getStats,
+  getPlatformStats,
 };

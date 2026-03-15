@@ -28,6 +28,9 @@ const feeConfigSchema = new mongoose.Schema(
     // Pool creation fee (USD-pegged, converted to FRY dynamically)
     poolCreationFeeUsd: { type: Number, default: 1.0 },
 
+    // Community event creation fee (percentage of reward pool)
+    communityEventFeePercent: { type: Number, default: 2.0 },
+
     // Fee recipient wallet
     feeRecipient: {
       type: String,

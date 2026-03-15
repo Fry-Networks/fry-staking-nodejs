@@ -25,6 +25,7 @@ const feeConfigRoutes = require('./routes/feeConfigRoutes');
 const eventRoutes = require('./routes/eventRoutes');
 const nftStakingRoute = require('./routes/nftStakingRoute');
 const alphaArcadeRoute = require('./routes/alphaArcadeRoute');
+const communityEventRoutes = require('./routes/communityEventRoutes');
 
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -109,7 +110,10 @@ app.use("/rewards", readLimiter, rewardsRoute);
 app.use("/feeconfig", readLimiter, feeConfigRoutes);
 app.use("/events", readLimiter, eventRoutes);
 app.use("/nftstaking", readLimiter, nftStakingRoute);
-app.use("/alpha-arcade", readLimiter, alphaArcadeRoute);
+app.use("/prediction-lp", readLimiter, alphaArcadeRoute);
+// Backward compatibility
+app.use("/alpha-arcade", (req, res) => res.redirect(301, `/prediction-lp${req.url}`));
+app.use("/community-events", readLimiter, communityEventRoutes);
 
 // 404 handler for undefined routes
 app.use((req, res) => {

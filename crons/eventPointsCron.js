@@ -11,9 +11,17 @@ cron.schedule('*/15 * * * *', async () => {
 
   try {
     // Auto-activate scheduled events whose start date has passed
+    // Exclude unfunded community events from auto-activation
     const now = new Date();
     const activated = await Event.updateMany(
-      { status: 'scheduled', startDate: { $lte: now } },
+      {
+        status: 'scheduled',
+        startDate: { $lte: now },
+        $or: [
+          { eventType: { $ne: 'community' } },
+          { eventType: 'community', fundingStatus: 'funded' },
+        ],
+      },
       { $set: { status: 'active' } }
     );
     if (activated.modifiedCount > 0) {

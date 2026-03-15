@@ -207,6 +207,7 @@ const feeConfigUpdateSchema = Joi.object({
   dailyClaimFeePercent: Joi.number().min(0).max(50),
   poolCreationFeePercent: Joi.number().min(0).max(50),
   poolCreationFeeUsd: Joi.number().min(0).max(1000),
+  communityEventFeePercent: Joi.number().min(0).max(50),
   feeRecipient: Joi.string(),
   revShareStakers: Joi.number().min(0).max(100),
   revShareTreasury: Joi.number().min(0).max(100),
@@ -357,6 +358,52 @@ const alphaArcadeRecordWithdrawSchema = Joi.object({
   withdrawFee: Joi.number().default(0),
 });
 
+// Community event creation schema
+const communityEventCreateSchema = Joi.object({
+  name: Joi.string().required().min(3).max(200),
+  description: Joi.string().max(2000).allow('').default(''),
+  startDate: Joi.date().iso().required(),
+  endDate: Joi.date().iso().required(),
+  rewardAsaId: Joi.number().integer().positive().required(),
+  rewardAmount: Joi.number().integer().positive().required(),
+  airdropDistribution: Joi.string().valid('proportional', 'tiered').default('proportional'),
+  airdropTiers: Joi.array().items(Joi.object({
+    rank: Joi.number().required(),
+    rankEnd: Joi.number(),
+    rewardAmount: Joi.number().required(),
+  })).default([]),
+  minPointsToQualify: Joi.number().min(0).default(0),
+  bannerImage: Joi.string().allow('').default(''),
+  challenges: Joi.array().items(Joi.object({
+    type: Joi.string().required(),
+    name: Joi.string().required(),
+    description: Joi.string().allow('').default(''),
+    pointsMultiplier: Joi.number().default(1),
+    config: Joi.object().default({}),
+  })).min(1).required(),
+});
+
+// Community event update schema
+const communityEventUpdateSchema = Joi.object({
+  name: Joi.string().min(3).max(200),
+  description: Joi.string().max(2000).allow(''),
+  startDate: Joi.date().iso(),
+  endDate: Joi.date().iso(),
+  airdropDistribution: Joi.string().valid('proportional', 'tiered'),
+  airdropTiers: Joi.array().items(Joi.object({
+    rank: Joi.number().required(),
+    rankEnd: Joi.number(),
+    rewardAmount: Joi.number().required(),
+  })),
+  minPointsToQualify: Joi.number().min(0),
+}).min(1);
+
+// Community event confirm funding schema
+const communityEventConfirmSchema = Joi.object({
+  txId: Joi.string().required(),
+  feeTxId: Joi.string().allow('').default(''),
+});
+
 module.exports = {
   validate,
   stakingSchema,
@@ -383,4 +430,7 @@ module.exports = {
   alphaArcadeBuildWithdrawSchema,
   alphaArcadeRecordDepositSchema,
   alphaArcadeRecordWithdrawSchema,
+  communityEventCreateSchema,
+  communityEventUpdateSchema,
+  communityEventConfirmSchema,
 };

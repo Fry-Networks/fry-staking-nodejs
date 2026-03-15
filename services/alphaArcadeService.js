@@ -85,8 +85,8 @@ async function getMarkets() {
  */
 async function getMarket(marketAppId) {
   try {
-    const config = getApiConfig();
-    return await getMarketFromApi(config, Number(marketAppId));
+    const client = getReadClient();
+    return await client.getMarketOnChain(Number(marketAppId));
   } catch (err) {
     logger.error(`Alpha Arcade getMarket(${marketAppId}) error:`, err.message);
     throw err;
@@ -195,6 +195,7 @@ async function buildDepositTxns({ wallet, marketAppId, usdcAmount, spreadBps, ye
   const suggestedParams = await algodClient.getTransactionParams().do();
 
   const txns = [];
+  let optInCosts = 0;
 
   // 1. Check and add opt-in transactions for YES/NO tokens
   const hasYesOptIn = await checkAssetOptIn(algodClient, wallet, effectiveYesAsaId);
@@ -206,6 +207,7 @@ async function buildDepositTxns({ wallet, marketAppId, usdcAmount, spreadBps, ye
       amount: 0,
       suggestedParams,
     }));
+    optInCosts += 1000;
   }
 
   const hasNoOptIn = await checkAssetOptIn(algodClient, wallet, effectiveNoAsaId);
@@ -217,9 +219,18 @@ async function buildDepositTxns({ wallet, marketAppId, usdcAmount, spreadBps, ye
       amount: 0,
       suggestedParams,
     }));
+    optInCosts += 1000;
   }
 
-  // 2. USDC payment to market contract for split shares
+  // 2. ALGO payment to market contract (funds inner transaction fees)
+  txns.push(algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+    sender: wallet,
+    receiver: marketAddress,
+    amount: 5000 + optInCosts,
+    suggestedParams,
+  }));
+
+  // 3. USDC payment to market contract for split shares
   txns.push(algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
     sender: wallet,
     receiver: marketAddress,
@@ -228,30 +239,33 @@ async function buildDepositTxns({ wallet, marketAppId, usdcAmount, spreadBps, ye
     suggestedParams,
   }));
 
-  // 3. App call to split shares
+  // 4. ABI app call — split_shares()uint8
+  const splitMethod = algosdk.ABIMethod.fromSignature('split_shares()uint8');
   txns.push(algosdk.makeApplicationCallTxnFromObject({
     sender: wallet,
     appIndex: numericMarketAppId,
-    appArgs: [new TextEncoder().encode('split')],
+    appArgs: [splitMethod.getSelector()],
     foreignAssets: [USDC_ASA_ID, effectiveYesAsaId, effectiveNoAsaId],
-    suggestedParams: { ...suggestedParams, fee: 4000, flatFee: true },
+    suggestedParams,
     onComplete: algosdk.OnApplicationComplete.NoOpOC,
   }));
 
-  // 4. Fee transfer (if applicable)
+  // Assign group ID to the split group
+  if (txns.length > 1) {
+    algosdk.assignGroupID(txns);
+  }
+
+  // 5. Fee transaction — separate, NOT in the split group
+  let feeTxn = null;
   if (feeMicro > 0 && feeWallet) {
-    txns.push(algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+    const feeTransfer = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
       sender: wallet,
       receiver: feeWallet,
       assetIndex: USDC_ASA_ID,
       amount: feeMicro,
       suggestedParams,
-    }));
-  }
-
-  // Assign group ID
-  if (txns.length > 1) {
-    algosdk.assignGroupID(txns);
+    });
+    feeTxn = Buffer.from(algosdk.encodeUnsignedTransaction(feeTransfer)).toString('base64');
   }
 
   // Compute mid-price and spread offsets for the response
@@ -260,6 +274,7 @@ async function buildDepositTxns({ wallet, marketAppId, usdcAmount, spreadBps, ye
 
   return {
     unsignedTxns: txns.map(txn => Buffer.from(algosdk.encodeUnsignedTransaction(txn)).toString('base64')),
+    feeTxn,
     yesAsaId: effectiveYesAsaId,
     noAsaId: effectiveNoAsaId,
     marketAddress,
@@ -300,27 +315,122 @@ async function buildWithdrawTxns({ wallet, marketAppId, matcherAppId, escrowAppI
     }));
   }
 
-  // 2. Fee transfer (if applicable)
-  if (feeMicro > 0 && feeWallet) {
-    txns.push(algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-      sender: wallet,
-      receiver: feeWallet,
-      assetIndex: USDC_ASA_ID,
-      amount: feeMicro,
-      suggestedParams,
-    }));
-  }
-
   // Assign group ID
   if (txns.length > 1) {
     algosdk.assignGroupID(txns);
   }
 
+  // 2. Fee transfer — separate, NOT in the escrow group
+  let feeTxn = null;
+  if (feeMicro > 0 && feeWallet) {
+    const feeTransfer = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+      sender: wallet,
+      receiver: feeWallet,
+      assetIndex: USDC_ASA_ID,
+      amount: feeMicro,
+      suggestedParams,
+    });
+    feeTxn = Buffer.from(algosdk.encodeUnsignedTransaction(feeTransfer)).toString('base64');
+  }
+
   return {
     unsignedTxns: txns.map(txn => Buffer.from(algosdk.encodeUnsignedTransaction(txn)).toString('base64')),
+    feeTxn,
     yesAsaId,
     noAsaId,
     matcherAppId: effectiveMatcherAppId,
+    fee: feeMicro || 0,
+  };
+}
+
+/**
+ * Build unsigned merge_shares transactions (convert YES+NO tokens back to USDC).
+ * Used when positions have no escrow orders to cancel.
+ */
+async function buildMergeSharesTxns({ wallet, marketAppId, amount, feeWallet, feeMicro }) {
+  const algodClient = getAlgodClient();
+  const numericMarketAppId = Number(marketAppId);
+
+  const globalState = await getMarketGlobalState(algodClient, numericMarketAppId);
+  const yesAsaId = globalState.yes_asset_id;
+  const noAsaId = globalState.no_asset_id;
+  const marketAddress = algosdk.getApplicationAddress(numericMarketAppId).toString();
+
+  const suggestedParams = await algodClient.getTransactionParams().do();
+  const txns = [];
+  let optInCosts = 0;
+
+  // 1. Check if user needs USDC opt-in
+  const hasUsdcOptIn = await checkAssetOptIn(algodClient, wallet, USDC_ASA_ID);
+  if (!hasUsdcOptIn) {
+    txns.push(algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+      sender: wallet,
+      receiver: wallet,
+      assetIndex: USDC_ASA_ID,
+      amount: 0,
+      suggestedParams,
+    }));
+    optInCosts += 1000;
+  }
+
+  // 2. ALGO payment to market (funds inner txn fees for sending USDC back)
+  txns.push(algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+    sender: wallet,
+    receiver: marketAddress,
+    amount: 5000 + optInCosts,
+    suggestedParams,
+  }));
+
+  // 3. YES token transfer to market
+  txns.push(algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+    sender: wallet,
+    receiver: marketAddress,
+    assetIndex: yesAsaId,
+    amount: amount,
+    suggestedParams,
+  }));
+
+  // 4. NO token transfer to market
+  txns.push(algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+    sender: wallet,
+    receiver: marketAddress,
+    assetIndex: noAsaId,
+    amount: amount,
+    suggestedParams,
+  }));
+
+  // 5. App call: merge_shares()uint8
+  const mergeMethod = algosdk.ABIMethod.fromSignature('merge_shares()uint8');
+  txns.push(algosdk.makeApplicationCallTxnFromObject({
+    sender: wallet,
+    appIndex: numericMarketAppId,
+    appArgs: [mergeMethod.getSelector()],
+    foreignAssets: [USDC_ASA_ID],
+    suggestedParams,
+    onComplete: algosdk.OnApplicationComplete.NoOpOC,
+  }));
+
+  // Assign group ID
+  algosdk.assignGroupID(txns);
+
+  // Fee transaction — separate, NOT in the merge group
+  let feeTxn = null;
+  if (feeMicro > 0 && feeWallet) {
+    const feeTransfer = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+      sender: wallet,
+      receiver: feeWallet,
+      assetIndex: USDC_ASA_ID,
+      amount: feeMicro,
+      suggestedParams,
+    });
+    feeTxn = Buffer.from(algosdk.encodeUnsignedTransaction(feeTransfer)).toString('base64');
+  }
+
+  return {
+    unsignedTxns: txns.map(txn => Buffer.from(algosdk.encodeUnsignedTransaction(txn)).toString('base64')),
+    feeTxn,
+    yesAsaId,
+    noAsaId,
     fee: feeMicro || 0,
   };
 }
@@ -358,4 +468,5 @@ module.exports = {
   getResolutionTime,
   buildDepositTxns,
   buildWithdrawTxns,
+  buildMergeSharesTxns,
 };

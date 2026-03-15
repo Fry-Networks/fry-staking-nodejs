@@ -22,12 +22,12 @@ const bannerUploadMiddleware = multer({
 const getActiveEvents = async (req, res) => {
   try {
     const now = new Date();
-    // Auto-activate scheduled events whose start date has passed
+    // Auto-activate scheduled events whose start date has passed (official only)
     await Event.updateMany(
-      { status: 'scheduled', startDate: { $lte: now } },
+      { status: 'scheduled', startDate: { $lte: now }, eventType: { $ne: 'community' } },
       { $set: { status: 'active' } }
     );
-    const events = await Event.find({ status: 'active' }).sort({ startDate: -1 }).lean();
+    const events = await Event.find({ status: 'active', eventType: { $ne: 'community' } }).sort({ startDate: -1 }).lean();
     const eventIds = events.map(e => e._id);
     const challenges = await Challenge.find({ eventId: { $in: eventIds } }).lean();
     const challengesByEvent = {};
@@ -49,7 +49,7 @@ const getActiveEvents = async (req, res) => {
 
 const getAllEvents = async (req, res) => {
   try {
-    const events = await Event.find({}).sort({ startDate: -1 }).lean();
+    const events = await Event.find({ eventType: { $ne: 'community' } }).sort({ startDate: -1 }).lean();
     res.status(200).json({ success: true, data: events });
   } catch (error) {
     logger.error("Error fetching all events:", error);

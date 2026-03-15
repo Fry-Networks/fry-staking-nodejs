@@ -21,16 +21,32 @@ async function distributeAirdrop(eventId) {
   const event = await Event.findById(eventId);
   if (!event) throw new Error('Event not found');
   if (event.status !== 'ended') throw new Error('Event must be ended before airdrop');
-  if (!event.airdropPoolFry || event.airdropPoolFry <= 0) {
-    logger.info(`Event ${event.name}: no airdrop pool configured, skipping`);
-    return { distributed: 0, successful: 0, failed: 0 };
+
+  const isCommunity = event.eventType === 'community';
+  let asaId, poolAmount, amountMultiplier;
+
+  if (isCommunity) {
+    if (event.fundingStatus !== 'funded') {
+      logger.info(`Community event ${event.name}: not funded, skipping airdrop`);
+      return { distributed: 0, successful: 0, failed: 0 };
+    }
+    asaId = event.rewardAsaId;
+    poolAmount = event.rewardPool;
+    amountMultiplier = 1; // already in base units
+  } else {
+    if (!event.airdropPoolFry || event.airdropPoolFry <= 0) {
+      logger.info(`Event ${event.name}: no airdrop pool configured, skipping`);
+      return { distributed: 0, successful: 0, failed: 0 };
+    }
+    const config = await RewardsConfig.getConfig();
+    asaId = config.fryAsaId || FRY_ASA_ID_DEFAULT;
+    poolAmount = event.airdropPoolFry;
+    amountMultiplier = 1e6; // FRY whole units → microunits
   }
+
   if (!treasuryAddr || !signingKey) {
     throw new Error('Treasury wallet not configured (REWARD_MNEMONIC/REWARD_REKEY missing)');
   }
-
-  const config = await RewardsConfig.getConfig();
-  const fryAsaId = config.fryAsaId || FRY_ASA_ID_DEFAULT;
 
   const qualifiedUsers = await EventPoints.find({
     eventId,
@@ -51,16 +67,19 @@ async function distributeAirdrop(eventId) {
       const tier = event.airdropTiers.find(
         t => user.rank >= t.rank && user.rank <= (t.rankEnd || t.rank)
       );
+      const tierReward = tier
+        ? (isCommunity ? (tier.rewardAmount || tier.rewardFry) : tier.rewardFry)
+        : 0;
       airdropAmounts.push({
         wallet: user.wallet,
-        amount: tier ? tier.rewardFry : 0,
+        amount: tierReward,
         pointsDocId: user._id,
       });
     }
   } else {
     for (const user of qualifiedUsers) {
       const share = totalPointsSum > 0
-        ? (user.totalPoints / totalPointsSum) * event.airdropPoolFry
+        ? (user.totalPoints / totalPointsSum) * poolAmount
         : 0;
       airdropAmounts.push({
         wallet: user.wallet,
@@ -76,8 +95,8 @@ async function distributeAirdrop(eventId) {
   for (const entry of airdropAmounts) {
     if (entry.amount <= 0) continue;
 
-    const microAmount = Math.floor(entry.amount * 1e6);
-    if (microAmount <= 0) continue;
+    const onChainAmount = Math.floor(entry.amount * amountMultiplier);
+    if (onChainAmount <= 0) continue;
 
     try {
       const { txId } = await withFallback(async (client) => {
@@ -85,8 +104,8 @@ async function distributeAirdrop(eventId) {
         const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
           sender: treasuryAddr,
           receiver: entry.wallet,
-          amount: microAmount,
-          assetIndex: fryAsaId,
+          amount: onChainAmount,
+          assetIndex: asaId,
           suggestedParams: params,
         });
         const signedTxn = txn.signTxn(signingKey);
@@ -109,6 +128,12 @@ async function distributeAirdrop(eventId) {
       });
       failed++;
     }
+  }
+
+  // Mark community event as distributed
+  if (isCommunity) {
+    event.fundingStatus = 'distributed';
+    await event.save();
   }
 
   const distributed = successful + failed;
