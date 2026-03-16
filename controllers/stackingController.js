@@ -204,7 +204,7 @@ const updateStakingData = async(req, res) => {
             },
         };
         if (totalAmountStaked !== undefined && !isNaN(totalAmountStaked)) {
-            updateOperation.$inc = { totalAmountStaked: totalAmountStaked };
+            updateOperation.$set.totalAmountStaked = totalAmountStaked;
         }
         const updatedStakingData = await Staking.findByIdAndUpdate(
             id,
