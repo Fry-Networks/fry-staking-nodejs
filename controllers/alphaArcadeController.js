@@ -6,6 +6,28 @@ const FeeConfig = require("../models/feeConfigSchema");
 const Staking = require("../models/stakingSchema");
 const Farming = require("../models/farmingSchema");
 
+// Estimated APR from spread, assuming 10% daily TVL turnover
+function computeEstimatedApr(pool) {
+  const spreadBps = pool.spreadBps || 50;
+  const totalLiquidity = pool.totalUsdcDeposited || 0;
+  const resolutionTime = pool.marketResolutionTime || 0;
+  const now = Math.floor(Date.now() / 1000);
+  const daysToResolution = resolutionTime > now ? (resolutionTime - now) / 86400 : 0;
+
+  const dailyTurnoverRate = 0.1;
+  const estimatedApr = totalLiquidity > 0
+    ? dailyTurnoverRate * (spreadBps / 10000) * 365 * 100
+    : 0;
+
+  return {
+    estimatedApr: Math.round(estimatedApr * 100) / 100,
+    spreadBps,
+    totalLiquidity,
+    daysToResolution: Math.round(daysToResolution * 10) / 10,
+    dataSource: 'estimated',
+  };
+}
+
 // GET /markets — list all live markets from Alpha Arcade API
 const getMarkets = async (req, res) => {
   try {
@@ -94,12 +116,17 @@ const getOrderbook = async (req, res) => {
 const getAllPools = async (req, res) => {
   try {
     const pools = await AlphaArcadePool.find({}).sort({ createdAt: -1 });
+    const poolsWithApr = pools.map(p => {
+      const obj = p.toObject();
+      obj.aprEstimate = computeEstimatedApr(p);
+      return obj;
+    });
     res.status(200).json({
       success: true,
-      message: pools.length === 0
+      message: poolsWithApr.length === 0
         ? "No Alpha Arcade pools found."
         : "Alpha Arcade pools fetched successfully.",
-      data: pools,
+      data: poolsWithApr,
     });
   } catch (error) {
     logger.error("Error fetching Alpha Arcade pools:", error);
@@ -122,10 +149,12 @@ const getPoolById = async (req, res) => {
         message: `Pool ${poolId} not found.`,
       });
     }
+    const poolObj = pool.toObject();
+    poolObj.aprEstimate = computeEstimatedApr(pool);
     res.status(200).json({
       success: true,
       message: "Pool fetched successfully.",
-      data: pool,
+      data: poolObj,
     });
   } catch (error) {
     logger.error(`Error fetching Alpha Arcade pool ${poolId}:`, error);
