@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { validate, stakingSchema } = require('../middleware/validate');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireRewardsAdmin } = require('../middleware/auth');
 
 const {
     getAllStakingData,
@@ -10,7 +10,8 @@ const {
     getStakingDataByContractId,
     addStakingData,
     updateStakingData,
-    deleteStakingData
+    deleteStakingData,
+    topUpPoolRewards,
 }  = require('../controllers/stackingController');
 
 router.get('/all', getAllStakingData);
@@ -20,6 +21,9 @@ router.get('/id/:id', getStakingDataById);
 router.post('/add', requireAuth, validate(stakingSchema), addStakingData);
 router.delete('/delete/:id', requireAuth, deleteStakingData);
 router.put('/update/:id', requireAuth, updateStakingData);
+
+// Admin: top up reward tokens on a depleted pool
+router.post('/admin/topup', requireAuth, requireRewardsAdmin, topUpPoolRewards);
 
 // Backward-compatible: legacy /:creatorId route
 router.get('/:creatorId', getStakingDataByCreatorId);
