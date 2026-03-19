@@ -204,7 +204,7 @@ const updateStakingData = async(req, res) => {
             },
         };
         if (totalAmountStaked !== undefined && !isNaN(totalAmountStaked)) {
-            updateOperation.$inc = { totalAmountStaked: totalAmountStaked };
+            updateOperation.$set.totalAmountStaked = totalAmountStaked;
         }
         const updatedStakingData = await Staking.findByIdAndUpdate(
             id,
@@ -265,6 +265,43 @@ const deleteStakingData = async(req, res) => {
 
 
 
+// Admin: top up reward tokens for a depleted staking pool
+const topUpPoolRewards = async (req, res) => {
+    const { poolId, amount } = req.body;
+
+    if (!poolId || !amount || amount <= 0) {
+        return res.status(400).json({
+            success: false,
+            message: "poolId and a positive amount are required",
+        });
+    }
+
+    try {
+        const pool = await Staking.findById(poolId);
+        if (!pool) {
+            return res.status(404).json({ success: false, message: "Pool not found" });
+        }
+
+        pool.rewardTokenAmount = (pool.rewardTokenAmount || 0) + amount;
+        await pool.save();
+
+        logger.info(`Admin topped up pool ${poolId} with ${amount} reward tokens (new total: ${pool.rewardTokenAmount})`);
+
+        res.status(200).json({
+            success: true,
+            message: "Pool rewards topped up",
+            data: { poolId, newRewardTokenAmount: pool.rewardTokenAmount },
+        });
+    } catch (error) {
+        logger.error("topUpPoolRewards error:", error.message);
+        res.status(500).json({
+            success: false,
+            message: "Failed to top up pool rewards",
+            error: error.message,
+        });
+    }
+};
+
 module.exports = {
     getAllStakingData,
     getStakingDataById,
@@ -273,4 +310,5 @@ module.exports = {
     addStakingData,
     updateStakingData,
     deleteStakingData,
+    topUpPoolRewards,
 };

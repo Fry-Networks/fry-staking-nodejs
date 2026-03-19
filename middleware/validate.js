@@ -99,6 +99,8 @@ const claimRewardSchema = Joi.object({
   rewardClaimed: Joi.number().required(),
   stakedAmount: Joi.number().required(),
   stakedTime: Joi.number().required(),
+  feeTxId: Joi.string().allow('').optional(),
+  feeAssetId: Joi.number().optional(),
 });
 
 // Claim farm reward schema
@@ -109,6 +111,8 @@ const claimFarmRewardSchema = Joi.object({
   stakedAmount: Joi.number().required(),
   stakeStartTime: Joi.number().required(),
   claimTime: Joi.number().required(),
+  feeTxId: Joi.string().allow('').optional(),
+  feeAssetId: Joi.number().optional(),
 });
 
 // Withdraw schema
@@ -117,6 +121,8 @@ const withdrawSchema = Joi.object({
   wallet: Joi.string().required(),
   poolId: Joi.string().required(),
   appId: Joi.number().required(),
+  feeTxId: Joi.string().allow('').optional(),
+  feeAssetId: Joi.number().optional(),
 });
 
 // Farming withdraw schema
@@ -125,6 +131,8 @@ const farmingWithdrawSchema = Joi.object({
   userWallet: Joi.string().required(),
   poolId: Joi.string().required(),
   farmingTokenId: Joi.string().required(),
+  feeTxId: Joi.string().allow('').optional(),
+  feeAssetId: Joi.number().optional(),
 });
 
 // Gas fee schema
@@ -358,6 +366,116 @@ const alphaArcadeRecordWithdrawSchema = Joi.object({
   withdrawFee: Joi.number().default(0),
 });
 
+// Alpha Arcade build claim schema
+const alphaArcadeBuildClaimSchema = Joi.object({
+  wallet: Joi.string().required(),
+  poolId: Joi.string().required(),
+});
+
+// Alpha Arcade record claim schema
+const alphaArcadeRecordClaimSchema = Joi.object({
+  wallet: Joi.string().required(),
+  poolId: Joi.string().optional(),
+  positionId: Joi.string().required(),
+  amountClaimed: Joi.number().default(0),
+  txId: Joi.string().required(),
+});
+
+// Device staking pool creation schema
+const createDevicePoolSchema = Joi.object({
+  appId: Joi.string().required(),
+  creator: Joi.string().required(),
+  name: Joi.string().required(),
+  description: Joi.string().allow('').default(''),
+  imageUrl: Joi.string().allow('').default(''),
+  stakingMode: Joi.string().valid('verified-hold', 'escrow').required(),
+  verifierAddress: Joi.string().allow('').default(''),
+  verificationIntervalMinutes: Joi.number().default(15),
+  verificationGracePeriod: Joi.number().default(3),
+  collectionCreator: Joi.string().allow('').default(''),
+  collectionMode: Joi.string().valid('creator_address', 'whitelist', 'both').default('creator_address'),
+  whitelist: Joi.array().items(Joi.number()).default([]),
+  acceptedCollections: Joi.array().items(Joi.object({
+    collectionId: Joi.string().allow('').default(''),
+    collectionName: Joi.string().allow('').default(''),
+    collectionImage: Joi.string().allow('').default(''),
+    chain: Joi.string().default('algorand-mainnet'),
+    identifiers: Joi.object({
+      creatorAddress: Joi.string().allow('').default(''),
+      contractAddress: Joi.string().allow('').default(''),
+      collectionAddress: Joi.string().allow('').default(''),
+      evmChainId: Joi.number().default(0),
+    }).default({}),
+  })).default([]),
+  rewardTokenId: Joi.number().required(),
+  rewardToken: Joi.object({
+    id: Joi.number().default(0),
+    name: Joi.string().allow('').default(''),
+    symbol: Joi.string().allow('').default(''),
+    image: Joi.string().allow('').default(''),
+    decimals: Joi.number().default(6),
+  }).default({}),
+  rewardModel: Joi.string().valid('fixed_rate', 'proportional', 'apr').required(),
+  rewardPerDay: Joi.number().default(0),
+  dailyPoolReward: Joi.number().default(0),
+  apr: Joi.number().default(0),
+  valuePerNft: Joi.number().default(0),
+  rewardAmount: Joi.number().default(0),
+  depositFeeBps: Joi.number().min(0).max(10000).default(0),
+  withdrawFeeBps: Joi.number().min(0).max(10000).default(0),
+  claimFeeBps: Joi.number().min(0).max(10000).default(800),
+  startDate: Joi.date().allow(null).default(null),
+  endDate: Joi.date().allow(null).default(null),
+  lockPeriod: Joi.number().default(0),
+  chainId: Joi.string().default('algorand-mainnet'),
+  chainType: Joi.string().valid('algorand', 'evm', 'solana', 'cosmos').default('algorand'),
+  tags: Joi.array().items(Joi.string()).default([]),
+  requirements: Joi.array().items(Joi.object({
+    requirementId: Joi.string().required(),
+    type: Joi.string().valid('token_balance', 'staking_position', 'nft_holding', 'multi_device', 'wallet_age').required(),
+    label: Joi.string().required(),
+    description: Joi.string().allow('').default(''),
+    params: Joi.object().required(),
+    enforcement: Joi.string().valid('required', 'optional_boost').default('required'),
+  })).default([]),
+  boostMultipliers: Joi.array().items(Joi.object({
+    multiplierId: Joi.string().required(),
+    label: Joi.string().required(),
+    description: Joi.string().allow('').default(''),
+    type: Joi.string().valid('stake_duration', 'token_balance', 'device_count', 'requirement_met').required(),
+    params: Joi.object().required(),
+    stackable: Joi.boolean().default(true),
+    maxMultiplier: Joi.number().default(100000),
+  })).default([]),
+  announcementsEnabled: Joi.boolean().default(true),
+  gatedAccessEnabled: Joi.boolean().default(true),
+  gatedAccessLabel: Joi.string().allow('').default(''),
+});
+
+// Device stake schema
+const stakeDeviceSchema = Joi.object({
+  poolAppId: Joi.string().required(),
+  deviceNftId: Joi.number().required(),
+  deviceNftName: Joi.string().allow('').default(''),
+});
+
+// Device announcement schema
+const createAnnouncementSchema = Joi.object({
+  title: Joi.string().max(200).required(),
+  body: Joi.string().max(2000).required(),
+  priority: Joi.string().valid('normal', 'urgent').default('normal'),
+  expiresAt: Joi.date().optional().allow(null),
+});
+
+// Wallet link schema
+const linkWalletSchema = Joi.object({
+  chainId: Joi.string().required(),
+  walletAddress: Joi.string().required(),
+  signature: Joi.string().required(),
+  message: Joi.string().required(),
+  timestamp: Joi.number().required(),
+});
+
 // Community event creation schema
 const communityEventCreateSchema = Joi.object({
   name: Joi.string().required().min(3).max(200),
@@ -430,7 +548,13 @@ module.exports = {
   alphaArcadeBuildWithdrawSchema,
   alphaArcadeRecordDepositSchema,
   alphaArcadeRecordWithdrawSchema,
+  alphaArcadeBuildClaimSchema,
+  alphaArcadeRecordClaimSchema,
   communityEventCreateSchema,
   communityEventUpdateSchema,
   communityEventConfirmSchema,
+  createDevicePoolSchema,
+  stakeDeviceSchema,
+  createAnnouncementSchema,
+  linkWalletSchema,
 };

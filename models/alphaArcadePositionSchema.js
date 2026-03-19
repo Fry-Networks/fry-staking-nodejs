@@ -9,7 +9,8 @@ const alphaArcadePositionSchema = new mongoose.Schema({
   noEscrowAppIds:      { type: [Number], default: [] },
   spreadUsed:          { type: Number, default: 0 },
   entryMidPrice:       { type: Number, default: 0 },
-  status:              { type: String, enum: ['active','pending_withdrawal','withdrawing','withdrawn','auto_withdrawn','resolved'], default: 'active' },
+  status:              { type: String, enum: ['active','pending_withdrawal','withdrawing','withdrawn','auto_withdrawn','resolved','claimed'], default: 'active' },
+  claimedAt:           { type: Date, default: null },
   warningsSent:        [{
     type:   { type: String, enum: ['48hr', '24hr', '6hr'] },
     sentAt: { type: Date, default: Date.now },

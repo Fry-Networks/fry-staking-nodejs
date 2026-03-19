@@ -220,7 +220,7 @@ const getUserFarmingStats = async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        totalTVL: totalStaked,       
+        totalTVL: activeStake,
         myStake: activeStake,
         myReward: totalReward
       }

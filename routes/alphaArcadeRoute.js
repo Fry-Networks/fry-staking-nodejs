@@ -9,6 +9,8 @@ const {
   alphaArcadeBuildWithdrawSchema,
   alphaArcadeRecordDepositSchema,
   alphaArcadeRecordWithdrawSchema,
+  alphaArcadeBuildClaimSchema,
+  alphaArcadeRecordClaimSchema,
 } = require('../middleware/validate');
 
 const {
@@ -24,6 +26,8 @@ const {
   buildWithdraw,
   recordDeposit,
   recordWithdraw,
+  buildClaim,
+  recordClaim,
   getPositionsByWallet,
   getPositionByWalletAndPool,
   adminCheckResolutions,
@@ -49,10 +53,12 @@ router.put('/pool/update/:poolId', requireAuth, requireAdmin, validate(alphaArca
 // Transaction build routes (authenticated)
 router.post('/build-deposit', requireAuth, validate(alphaArcadeBuildDepositSchema), buildDeposit);
 router.post('/build-withdraw', requireAuth, validate(alphaArcadeBuildWithdrawSchema), buildWithdraw);
+router.post('/build-claim', requireAuth, validate(alphaArcadeBuildClaimSchema), buildClaim);
 
 // Record routes (authenticated)
 router.post('/record-deposit', requireAuth, validate(alphaArcadeRecordDepositSchema), recordDeposit);
 router.post('/record-withdraw', requireAuth, validate(alphaArcadeRecordWithdrawSchema), recordWithdraw);
+router.post('/record-claim', requireAuth, validate(alphaArcadeRecordClaimSchema), recordClaim);
 
 // Admin routes
 router.get('/admin/platform-stats', requireAuth, requireAdmin, getPlatformStats);

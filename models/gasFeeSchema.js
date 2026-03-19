@@ -37,6 +37,8 @@ const gasFeeSchema = new mongoose.Schema(
     },
     txId: {
       type: String,
+      unique: true,
+      sparse: true,
     },
     usdValue: {
       type: Number,
