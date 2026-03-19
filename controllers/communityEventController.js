@@ -3,6 +3,7 @@ const Event = require("../models/eventSchema");
 const Challenge = require("../models/challengeSchema");
 const EventPoints = require("../models/eventPointsSchema");
 const FeeConfig = require("../models/feeConfigSchema");
+const GasFee = require("../models/gasFeeSchema");
 const { buildFundingTxns, buildRefundTxn } = require("../services/communityEventService");
 const { getAlgodClient } = require("../services/algodService");
 const multer = require("multer");
@@ -225,6 +226,18 @@ const confirmFunding = async (req, res) => {
 
     if (!event) {
       return res.status(400).json({ success: false, message: "Event not found, not yours, or already funded" });
+    }
+
+    // Log community event fee to GasFee collection
+    if (event.fundingFeeAmount > 0) {
+      GasFee.create({
+        appId: 0,
+        userId: wallet,
+        gasAmount: event.fundingFeeAmount,
+        gasType: 'communityEventFee',
+        feeType: 'percentage',
+        txId: feeTxId || undefined,
+      }).catch(err => logger.error('Failed to log community event fee:', err.message));
     }
 
     res.status(200).json({

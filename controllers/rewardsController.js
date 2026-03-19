@@ -88,14 +88,30 @@ const getRewardsStatus = async (req, res) => {
     const dailyFeePercent = feeConfig ? (feeConfig.dailyClaimFeePercent || 0) : 0;
     const estimatedRewardAfterFee = Math.floor(estimatedReward * (100 - dailyFeePercent) / 100);
 
-    // Cooldown info
+    // Cooldown info (includes escalated cooldown for shared devices)
     let canClaim = true;
     let cooldownRemaining = 0;
     if (lastClaimAt) {
       const hoursSinceClaim = (Date.now() - lastClaimAt.getTime()) / (1000 * 60 * 60);
-      if (hoursSinceClaim < config.claimCooldownHours) {
+
+      // Check for escalated cooldown (shared device detection)
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const latestClaim = await DailyClaim.findOne({ walletAddress: wallet }).sort({ claimDate: -1 });
+      let effectiveCooldown = config.claimCooldownHours;
+
+      if (latestClaim && latestClaim.fingerprintHash) {
+        const fpDistinctWallets = await DailyClaim.distinct('walletAddress', {
+          fingerprintHash: latestClaim.fingerprintHash,
+          claimDate: { $gte: sevenDaysAgo },
+        });
+        if (fpDistinctWallets.length > 1) {
+          effectiveCooldown = config.claimCooldownHours * Math.pow(2, fpDistinctWallets.length - 1);
+        }
+      }
+
+      if (hoursSinceClaim < effectiveCooldown) {
         canClaim = false;
-        cooldownRemaining = Math.ceil((config.claimCooldownHours - hoursSinceClaim) * 60);
+        cooldownRemaining = Math.ceil((effectiveCooldown - hoursSinceClaim) * 60);
       }
     }
 
@@ -146,19 +162,6 @@ const getRewardsStatus = async (req, res) => {
  */
 const claimReward = async (req, res) => {
   try {
-    // Temporary diagnostic logging to identify which header Bunny CDN sends with real client IP
-    console.log('[Claim IP Debug]', JSON.stringify({
-      reqIp: req.ip,
-      xForwardedFor: req.headers['x-forwarded-for'],
-      xRealIp: req.headers['x-real-ip'],
-      cfConnectingIp: req.headers['cf-connecting-ip'],
-      trueClientIp: req.headers['true-client-ip'],
-      xClientIp: req.headers['x-client-ip'],
-      forwardedFor: req.headers['forwarded'],
-      remoteAddress: req.connection?.remoteAddress || req.socket?.remoteAddress,
-      allHeaders: Object.keys(req.headers).filter(h => h.includes('ip') || h.includes('forward') || h.includes('client') || h.includes('real') || h.includes('bunny') || h.includes('cdn'))
-    }));
-
     const { fingerprint, turnstileToken } = req.body;
     const wallet = req.user.wallet;
     const ip = req.ip || req.connection.remoteAddress;

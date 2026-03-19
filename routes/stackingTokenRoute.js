@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middleware/auth');
+const { requireFeePayment } = require('../middleware/requireFeePayment');
 
 const {
   addStakingToken,
@@ -14,7 +15,7 @@ const {
   getStakingTokensByWallet
 } = require('../controllers/stackingTokenController');
 
-router.post('/add', requireAuth, addStakingToken);
+router.post('/add', requireAuth, requireFeePayment('stakingDeposit', (req) => req.body.totalStaked || 0), addStakingToken);
 router.get('/all', getAllStakingTokens);
 router.get("/pool/:poolId", getStakingTokensByPoolId);
 router.get('/tokens/:poolId', getPoolTokensAndWithdrawn);

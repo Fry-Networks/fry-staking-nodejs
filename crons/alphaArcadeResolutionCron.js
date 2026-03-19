@@ -2,7 +2,7 @@ const cron = require('node-cron');
 const logger = require('../config/logger');
 const AlphaArcadePosition = require('../models/alphaArcadePositionSchema');
 const AlphaArcadePool = require('../models/alphaArcadePoolSchema');
-const { getResolutionTime } = require('../services/alphaArcadeService');
+const { getResolutionTime, getMarketOutcome } = require('../services/alphaArcadeService');
 const {
   sendResolutionWarning,
   sendPositionResolved,
@@ -53,6 +53,24 @@ async function checkResolutions() {
             if (notificationsSent < MAX_NOTIFICATIONS_PER_RUN) {
               await sendPositionResolved(position, pool);
               notificationsSent++;
+            }
+
+            // Populate pool resolution state from on-chain outcome
+            if (pool && !pool.isResolved) {
+              try {
+                const { isResolved, outcome } = await getMarketOutcome(pool.marketAppId);
+                if (isResolved && outcome) {
+                  await AlphaArcadePool.findByIdAndUpdate(pool._id, {
+                    isResolved: true,
+                    resolutionOutcome: outcome,
+                  });
+                  logger.info(
+                    `Resolution cron: pool ${pool._id} (market ${pool.marketAppId}) resolved with outcome: ${outcome}`
+                  );
+                }
+              } catch (err) {
+                logger.error(`Resolution cron: failed to update pool resolution for ${pool._id}: ${err.message}`);
+              }
             }
           }
           continue;

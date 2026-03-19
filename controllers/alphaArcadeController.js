@@ -3,28 +3,49 @@ const AlphaArcadePool = require("../models/alphaArcadePoolSchema");
 const AlphaArcadePosition = require("../models/alphaArcadePositionSchema");
 const alphaArcadeService = require("../services/alphaArcadeService");
 const FeeConfig = require("../models/feeConfigSchema");
+const GasFee = require("../models/gasFeeSchema");
 const Staking = require("../models/stakingSchema");
 const Farming = require("../models/farmingSchema");
 
-// Estimated APR from spread, assuming 10% daily TVL turnover
-function computeEstimatedApr(pool) {
+// Estimated APR from spread, using real volume and total market liquidity
+function computeEstimatedApr(pool, market, liquidityData) {
   const spreadBps = pool.spreadBps || 50;
-  const totalLiquidity = pool.totalUsdcDeposited || 0;
+  const poolTvlMicro = pool.totalUsdcDeposited || 0;
   const resolutionTime = pool.marketResolutionTime || 0;
   const now = Math.floor(Date.now() / 1000);
   const daysToResolution = resolutionTime > now ? (resolutionTime - now) / 86400 : 0;
 
-  const dailyTurnoverRate = 0.1;
-  const estimatedApr = totalLiquidity > 0
-    ? dailyTurnoverRate * (spreadBps / 10000) * 365 * 100
-    : 0;
+  const twentyFourHrVolume = market?.twentyFourHrVolume || 0; // whole USDC
+
+  // Determine total market liquidity (all LPs, not just fry.farm)
+  let totalLiquidityUsdc = 0;
+  let dataSource = 'estimated';
+
+  if (liquidityData?.totalDepthUsdc > 0) {
+    totalLiquidityUsdc = liquidityData.totalDepthUsdc;
+    dataSource = 'orderbook-based';
+  } else if (liquidityData?.totalSupplyUsdc > 0) {
+    totalLiquidityUsdc = liquidityData.totalSupplyUsdc;
+    dataSource = 'supply-based';
+  }
+
+  let estimatedApr;
+  if (twentyFourHrVolume > 0 && totalLiquidityUsdc > 0) {
+    // APR = (volume / total_market_liquidity) * spread * 365 * 100
+    estimatedApr = (twentyFourHrVolume / totalLiquidityUsdc) * (spreadBps / 10000) * 365 * 100;
+  } else {
+    // Static fallback: 10% daily turnover assumption
+    estimatedApr = 0.1 * (spreadBps / 10000) * 365 * 100;
+    dataSource = 'estimated';
+  }
 
   return {
     estimatedApr: Math.round(estimatedApr * 100) / 100,
     spreadBps,
-    totalLiquidity,
+    totalLiquidity: poolTvlMicro,
+    totalMarketLiquidityUsdc: Math.round(totalLiquidityUsdc * 100) / 100,
     daysToResolution: Math.round(daysToResolution * 10) / 10,
-    dataSource: 'estimated',
+    dataSource,
   };
 }
 
@@ -115,10 +136,30 @@ const getOrderbook = async (req, res) => {
 // GET /pools — list all pools
 const getAllPools = async (req, res) => {
   try {
-    const pools = await AlphaArcadePool.find({}).sort({ createdAt: -1 });
+    const [pools, markets] = await Promise.all([
+      AlphaArcadePool.find({}).sort({ createdAt: -1 }),
+      alphaArcadeService.getMarkets().catch(() => []),
+    ]);
+    const marketMap = new Map();
+    for (const m of markets) {
+      marketMap.set(m.marketAppId, m);
+    }
+
+    // Fetch liquidity data for each pool in parallel (Redis-cached, 5-min TTL)
+    const liquidityResults = await Promise.all(
+      pools.map(async (p) => {
+        const depth = await alphaArcadeService.getOrderbookDepth(p.marketAppId);
+        if (depth.totalDepthUsdc > 0) return { marketAppId: p.marketAppId, ...depth };
+        const supply = await alphaArcadeService.getMarketTokenSupply(p.marketAppId);
+        return { marketAppId: p.marketAppId, ...supply };
+      })
+    );
+    const liquidityMap = new Map();
+    for (const l of liquidityResults) liquidityMap.set(l.marketAppId, l);
+
     const poolsWithApr = pools.map(p => {
       const obj = p.toObject();
-      obj.aprEstimate = computeEstimatedApr(p);
+      obj.aprEstimate = computeEstimatedApr(p, marketMap.get(p.marketAppId), liquidityMap.get(p.marketAppId));
       return obj;
     });
     res.status(200).json({
@@ -149,8 +190,13 @@ const getPoolById = async (req, res) => {
         message: `Pool ${poolId} not found.`,
       });
     }
+    const market = await alphaArcadeService.getMarket(pool.marketAppId).catch(() => null);
+    const depth = await alphaArcadeService.getOrderbookDepth(pool.marketAppId);
+    const liquidityData = depth.totalDepthUsdc > 0
+      ? depth
+      : await alphaArcadeService.getMarketTokenSupply(pool.marketAppId);
     const poolObj = pool.toObject();
-    poolObj.aprEstimate = computeEstimatedApr(pool);
+    poolObj.aprEstimate = computeEstimatedApr(pool, market, liquidityData);
     res.status(200).json({
       success: true,
       message: "Pool fetched successfully.",
@@ -408,6 +454,19 @@ const recordDeposit = async (req, res) => {
       feesPaid: { depositFee: Number(depositFee || 0) },
     });
 
+    // Log deposit fee to GasFee collection
+    if (Number(depositFee || 0) > 0) {
+      GasFee.create({
+        appId: Number(marketAppId),
+        userId: wallet,
+        gasAmount: Number(depositFee),
+        gasType: 'alphaArcadeDeposit',
+        feeType: 'percentage',
+        baseAmount: Number(usdcDeposited),
+        baseToken: 'USDC',
+      }).catch(err => logger.error('Failed to log Alpha Arcade deposit fee:', err.message));
+    }
+
     // Update pool totals
     await AlphaArcadePool.findByIdAndUpdate(poolId, {
       $inc: { totalProviders: 1, totalUsdcDeposited: Number(usdcDeposited) },
@@ -460,6 +519,19 @@ const recordWithdraw = async (req, res) => {
     position.feesPaid = position.feesPaid || {};
     position.feesPaid.withdrawFee = Number(withdrawFee || 0);
     await position.save();
+
+    // Log withdraw fee to GasFee collection
+    if (Number(withdrawFee || 0) > 0) {
+      GasFee.create({
+        appId: position.marketAppId,
+        userId: wallet,
+        gasAmount: Number(withdrawFee),
+        gasType: 'alphaArcadeWithdraw',
+        feeType: 'percentage',
+        baseAmount: position.usdcDeposited,
+        baseToken: 'USDC',
+      }).catch(err => logger.error('Failed to log Alpha Arcade withdraw fee:', err.message));
+    }
 
     // Decrement pool totals
     await AlphaArcadePool.findByIdAndUpdate(poolId || position.poolId, {
@@ -600,6 +672,113 @@ const getPlatformStats = async (req, res) => {
   }
 };
 
+// POST /build-claim — build unsigned claim transactions for resolved markets
+const buildClaim = async (req, res) => {
+  const { wallet, poolId } = req.body;
+
+  try {
+    const pool = await AlphaArcadePool.findById(poolId);
+    if (!pool) {
+      return res.status(404).json({ success: false, message: `Pool ${poolId} not found.` });
+    }
+    if (!pool.isResolved || !pool.resolutionOutcome) {
+      return res.status(400).json({ success: false, message: 'Market not yet resolved on-chain.' });
+    }
+
+    const position = await AlphaArcadePosition.findOne({
+      wallet,
+      poolId,
+      status: 'resolved',
+    });
+    if (!position) {
+      return res.status(404).json({ success: false, message: 'No resolved position found for this wallet and pool.' });
+    }
+
+    // Determine winning asset
+    const winningAssetId = pool.resolutionOutcome === 'yes' ? pool.yesAsaId : pool.noAsaId;
+
+    // Calculate claim fee (same as withdraw fee)
+    const feeConfig = await FeeConfig.getFeeConfig();
+    const feeBps = feeConfig.alphaArcadeWithdrawFeePercent * 100;
+    const feeMicro = Math.floor(position.usdcDeposited * feeBps / 10000);
+
+    const result = await alphaArcadeService.buildClaimTxns({
+      wallet,
+      marketAppId: pool.marketAppId,
+      assetId: winningAssetId,
+      amount: position.usdcDeposited,
+      feeWallet: feeConfig.feeRecipient,
+      feeMicro,
+    });
+
+    // Log claim fee to GasFee collection
+    if (feeMicro > 0) {
+      GasFee.create({
+        appId: pool.marketAppId,
+        userId: wallet,
+        gasAmount: feeMicro,
+        gasType: 'alphaArcadeClaim',
+        feeType: 'percentage',
+        baseAmount: position.usdcDeposited,
+        baseToken: 'USDC',
+      }).catch(err => logger.error('Failed to log Alpha Arcade claim fee:', err.message));
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Claim transactions built successfully.',
+      data: {
+        ...result,
+        poolId: pool._id.toString(),
+        positionId: position._id.toString(),
+        outcome: pool.resolutionOutcome,
+        fee: feeMicro,
+        feePercent: feeConfig.alphaArcadeWithdrawFeePercent,
+      },
+    });
+  } catch (error) {
+    logger.error('Error building Alpha Arcade claim:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while building claim transactions.',
+      error: error.message,
+    });
+  }
+};
+
+// POST /record-claim — record a confirmed claim
+const recordClaim = async (req, res) => {
+  const { wallet, positionId, amountClaimed, txId } = req.body;
+
+  try {
+    const position = await AlphaArcadePosition.findById(positionId);
+    if (!position) {
+      return res.status(404).json({ success: false, message: `Position ${positionId} not found.` });
+    }
+    if (position.wallet !== wallet) {
+      return res.status(403).json({ success: false, message: 'Wallet does not match position owner.' });
+    }
+
+    position.status = 'claimed';
+    position.claimedAt = new Date();
+    position.usdcRecovered = Number(amountClaimed || 0);
+    await position.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Claim recorded successfully.',
+      data: position,
+    });
+  } catch (error) {
+    logger.error('Error recording Alpha Arcade claim:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while recording claim.',
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getMarkets,
   getRewardMarkets,
@@ -611,8 +790,10 @@ module.exports = {
   updatePool,
   buildDeposit,
   buildWithdraw,
+  buildClaim,
   recordDeposit,
   recordWithdraw,
+  recordClaim,
   getPositionsByWallet,
   getPositionByWalletAndPool,
   adminCheckResolutions,

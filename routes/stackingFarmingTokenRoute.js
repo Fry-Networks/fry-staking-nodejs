@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const controller = require('../controllers/stakingFarmingTokenController');
 const { requireAuth } = require('../middleware/auth');
+const { requireFeePayment } = require('../middleware/requireFeePayment');
 
-router.post('/add', requireAuth, controller.addStakingFarmingToken);
+router.post('/add', requireAuth, requireFeePayment('farmingDeposit', (req) => Math.floor((req.body.stakedAmount || 0) * 1_000_000)), controller.addStakingFarmingToken);
 router.get('/', controller.getAllStakingFarmingTokens);
 router.get('/pool/:poolId', controller.getPoolTokensAndWithdrawn);
 router.get('/pool/:poolId/user/:wallet', controller.getStakingFarmingByUserAndPool);

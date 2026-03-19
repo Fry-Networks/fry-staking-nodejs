@@ -99,6 +99,8 @@ const claimRewardSchema = Joi.object({
   rewardClaimed: Joi.number().required(),
   stakedAmount: Joi.number().required(),
   stakedTime: Joi.number().required(),
+  feeTxId: Joi.string().allow('').optional(),
+  feeAssetId: Joi.number().optional(),
 });
 
 // Claim farm reward schema
@@ -109,6 +111,8 @@ const claimFarmRewardSchema = Joi.object({
   stakedAmount: Joi.number().required(),
   stakeStartTime: Joi.number().required(),
   claimTime: Joi.number().required(),
+  feeTxId: Joi.string().allow('').optional(),
+  feeAssetId: Joi.number().optional(),
 });
 
 // Withdraw schema
@@ -117,6 +121,8 @@ const withdrawSchema = Joi.object({
   wallet: Joi.string().required(),
   poolId: Joi.string().required(),
   appId: Joi.number().required(),
+  feeTxId: Joi.string().allow('').optional(),
+  feeAssetId: Joi.number().optional(),
 });
 
 // Farming withdraw schema
@@ -125,6 +131,8 @@ const farmingWithdrawSchema = Joi.object({
   userWallet: Joi.string().required(),
   poolId: Joi.string().required(),
   farmingTokenId: Joi.string().required(),
+  feeTxId: Joi.string().allow('').optional(),
+  feeAssetId: Joi.number().optional(),
 });
 
 // Gas fee schema
@@ -358,6 +366,21 @@ const alphaArcadeRecordWithdrawSchema = Joi.object({
   withdrawFee: Joi.number().default(0),
 });
 
+// Alpha Arcade build claim schema
+const alphaArcadeBuildClaimSchema = Joi.object({
+  wallet: Joi.string().required(),
+  poolId: Joi.string().required(),
+});
+
+// Alpha Arcade record claim schema
+const alphaArcadeRecordClaimSchema = Joi.object({
+  wallet: Joi.string().required(),
+  poolId: Joi.string().optional(),
+  positionId: Joi.string().required(),
+  amountClaimed: Joi.number().default(0),
+  txId: Joi.string().required(),
+});
+
 // Device staking pool creation schema
 const createDevicePoolSchema = Joi.object({
   appId: Joi.string().required(),
@@ -525,6 +548,8 @@ module.exports = {
   alphaArcadeBuildWithdrawSchema,
   alphaArcadeRecordDepositSchema,
   alphaArcadeRecordWithdrawSchema,
+  alphaArcadeBuildClaimSchema,
+  alphaArcadeRecordClaimSchema,
   communityEventCreateSchema,
   communityEventUpdateSchema,
   communityEventConfirmSchema,

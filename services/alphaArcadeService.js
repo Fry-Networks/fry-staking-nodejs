@@ -1,5 +1,6 @@
 const algosdk = require('algosdk');
 const logger = require('../config/logger');
+const redis = require('../config/redis');
 const { getAlgodClient } = require('./algodService');
 const AlphaArcadePool = require('../models/alphaArcadePoolSchema');
 
@@ -458,15 +459,155 @@ async function getResolutionTime(marketAppId) {
   return endTs;
 }
 
+const ORDERBOOK_DEPTH_TTL = 300; // 5 minutes
+
+/**
+ * Get total orderbook depth (active liquidity) for a market.
+ * Cached in Redis for 5 minutes to minimize API calls.
+ */
+async function getOrderbookDepth(marketAppId) {
+  const cacheKey = `ob_depth:${marketAppId}`;
+  try {
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+  } catch (e) { /* cache miss */ }
+
+  try {
+    const orderbook = await getOrderbook(marketAppId);
+    let totalDepthMicro = 0;
+    for (const side of ['yes', 'no']) {
+      for (const type of ['bids', 'asks']) {
+        for (const entry of (orderbook?.[side]?.[type] || [])) {
+          totalDepthMicro += entry.quantity || 0;
+        }
+      }
+    }
+    const result = { totalDepthUsdc: totalDepthMicro / 1_000_000 };
+    try { await redis.set(cacheKey, JSON.stringify(result), 'EX', ORDERBOOK_DEPTH_TTL); } catch (e) { /* ok */ }
+    return result;
+  } catch (err) {
+    logger.warn(`Orderbook depth failed for ${marketAppId}: ${err.message}`);
+    return { totalDepthUsdc: 0 };
+  }
+}
+
+/**
+ * Get total token supply (USDC locked) for a market from on-chain state.
+ * Fallback when orderbook depth unavailable.
+ */
+async function getMarketTokenSupply(marketAppId) {
+  try {
+    const algodClient = getAlgodClient();
+    const gs = await getMarketGlobalState(algodClient, Number(marketAppId));
+    const totalSupplyMicro = Math.min(gs.yes_supply || 0, gs.no_supply || 0);
+    return { totalSupplyUsdc: totalSupplyMicro / 1_000_000 };
+  } catch (err) {
+    logger.warn(`Token supply failed for ${marketAppId}: ${err.message}`);
+    return { totalSupplyUsdc: 0 };
+  }
+}
+
+/**
+ * Get market resolution outcome from on-chain state.
+ * @returns {{ isResolved: boolean, outcome: string|null }}
+ */
+async function getMarketOutcome(marketAppId) {
+  try {
+    const algodClient = getAlgodClient();
+    const globalState = await getMarketGlobalState(algodClient, Number(marketAppId));
+    const isResolved = globalState.is_resolved === 1;
+    let outcome = null;
+    if (isResolved) {
+      outcome = globalState.outcome === 1 ? 'yes' : 'no';
+    }
+    return { isResolved, outcome };
+  } catch (err) {
+    logger.warn(`Failed to get market outcome for ${marketAppId}: ${err.message}`);
+    return { isResolved: false, outcome: null };
+  }
+}
+
+/**
+ * Build unsigned claim transactions for redeeming winning tokens after resolution.
+ * Replicates the SDK's claim() transaction structure without signing.
+ */
+async function buildClaimTxns({ wallet, marketAppId, assetId, amount, feeWallet, feeMicro }) {
+  const algodClient = getAlgodClient();
+  const numericMarketAppId = Number(marketAppId);
+  const marketAddress = algosdk.getApplicationAddress(numericMarketAppId).toString();
+  const suggestedParams = await algodClient.getTransactionParams().do();
+
+  const txns = [];
+
+  // 1. Transfer outcome tokens to market contract
+  txns.push(algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+    sender: wallet,
+    receiver: marketAddress,
+    assetIndex: Number(assetId),
+    amount: Number(amount),
+    suggestedParams,
+  }));
+
+  // 2. App call: claim()uint8
+  const claimMethod = algosdk.ABIMethod.fromSignature('claim()uint8');
+  txns.push(algosdk.makeApplicationCallTxnFromObject({
+    sender: wallet,
+    appIndex: numericMarketAppId,
+    appArgs: [claimMethod.getSelector()],
+    foreignAssets: [USDC_ASA_ID, Number(assetId)],
+    suggestedParams: { ...suggestedParams, fee: 1000, flatFee: true },
+    onComplete: algosdk.OnApplicationComplete.NoOpOC,
+  }));
+
+  // 3. Close out outcome token (return remainder to market)
+  txns.push(algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+    sender: wallet,
+    receiver: marketAddress,
+    assetIndex: Number(assetId),
+    amount: 0,
+    closeRemainderTo: marketAddress,
+    suggestedParams,
+  }));
+
+  // Assign group ID
+  algosdk.assignGroupID(txns);
+
+  // 4. Fee transaction (separate, not in claim group)
+  let feeTxn = null;
+  if (feeMicro > 0 && feeWallet) {
+    const feeTransfer = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+      sender: wallet,
+      receiver: feeWallet,
+      assetIndex: USDC_ASA_ID,
+      amount: feeMicro,
+      suggestedParams,
+    });
+    feeTxn = Buffer.from(algosdk.encodeUnsignedTransaction(feeTransfer)).toString('base64');
+  }
+
+  return {
+    unsignedTxns: txns.map(txn => Buffer.from(algosdk.encodeUnsignedTransaction(txn)).toString('base64')),
+    feeTxn,
+    marketAddress,
+    assetId: Number(assetId),
+    amount: Number(amount),
+    fee: feeMicro || 0,
+  };
+}
+
 module.exports = {
   getReadClient,
   getMarkets,
   getMarket,
   getRewardMarkets,
   getOrderbook,
+  getOrderbookDepth,
+  getMarketTokenSupply,
   getOrCreatePool,
   getResolutionTime,
+  getMarketOutcome,
   buildDepositTxns,
   buildWithdrawTxns,
   buildMergeSharesTxns,
+  buildClaimTxns,
 };
