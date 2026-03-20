@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const stakingSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   creatorId: {
   type: String,
     required: true,

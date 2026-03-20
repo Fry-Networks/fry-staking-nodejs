@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const walletStreakSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   walletAddress: { type: String, required: true, unique: true, index: true },
   currentStreak: { type: Number, default: 0 },
   lastClaimAt: { type: Date, default: null },

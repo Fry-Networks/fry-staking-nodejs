@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const circuitBreakerStateSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   currentLevel: { type: String, enum: ['green', 'yellow', 'orange', 'red'], default: 'green' },
   claimsThisHour: { type: Number, default: 0 },
   claimsToday: { type: Number, default: 0 },

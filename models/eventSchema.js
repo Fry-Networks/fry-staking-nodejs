@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const eventSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   name: {
     type: String,
     required: true,

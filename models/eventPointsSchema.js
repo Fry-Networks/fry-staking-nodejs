@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const eventPointsSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   eventId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Event',

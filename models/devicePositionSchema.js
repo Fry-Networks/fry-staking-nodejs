@@ -21,6 +21,7 @@ const devicePositionSchema = new mongoose.Schema({
   deviceChainId: {
     type: String,
     default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
   },
   stakingMode: {
     type: String,

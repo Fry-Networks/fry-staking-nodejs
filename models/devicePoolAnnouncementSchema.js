@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const devicePoolAnnouncementSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   poolAppId: {
     type: String,
     required: true,

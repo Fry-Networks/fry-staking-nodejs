@@ -2,6 +2,12 @@
 const mongoose = require("mongoose");
 
 const tokenSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   tokenId: {
     type: Number,
     required: true,

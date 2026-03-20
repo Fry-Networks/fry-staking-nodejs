@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const alphaArcadePoolSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   creatorId:            { type: String, default: 'system' },
   marketAppId:          { type: Number, required: true, unique: true },
   matcherAppId:         { type: Number, default: 3078581851 },

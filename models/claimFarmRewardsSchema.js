@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const claimFarmRewardSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   walletId: {
     type: String,
     required: true,

@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const claimRewardSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   rewardClaimed: {
     type: Number,
     required: true,

@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const withdrawSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   tokens: {
     type: Number,
     required: true,

@@ -159,6 +159,7 @@ const devicePoolSchema = new mongoose.Schema({
   chainId: {
     type: String,
     default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
   },
   chainType: {
     type: String,

@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const yieldFarmingSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   poolCreator: {
     type: String,
     required: true,
