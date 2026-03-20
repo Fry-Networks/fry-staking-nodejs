@@ -29,6 +29,8 @@ const communityEventRoutes = require('./routes/communityEventRoutes');
 const deviceStakingRoutes = require('./routes/deviceStakingRoutes');
 const deviceAccessRoutes = require('./routes/deviceAccessRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const chainMiddleware = require('./middleware/chainMiddleware');
+const chainRoutes = require('./routes/chainRoutes');
 
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -46,7 +48,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(cors({
   origin: 'https://fry.farm',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'cache-control'],
+  allowedHeaders: ['Content-Type', 'cache-control', 'X-Chain-Id'],
   credentials: true,
 }));
 
@@ -89,6 +91,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Chain middleware — injects req.chainId and req.chainConfig (defaults to algorand-mainnet)
+app.use(chainMiddleware);
+
 // Auth routes (with stricter rate limit)
 app.use('/auth', authRoutes);
 
@@ -120,6 +125,7 @@ app.use("/community-events", readLimiter, communityEventRoutes);
 app.use("/devicestaking", readLimiter, deviceStakingRoutes);
 app.use("/device-access", readLimiter, deviceAccessRoutes);
 app.use("/ai", writeLimiter, aiRoutes);
+app.use("/chains", readLimiter, chainRoutes);
 
 // 404 handler for undefined routes
 app.use((req, res) => {
