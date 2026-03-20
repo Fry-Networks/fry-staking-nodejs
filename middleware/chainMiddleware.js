@@ -25,4 +25,22 @@ function chainMiddleware(req, res, next) {
   next();
 }
 
+/** Route-level middleware: reject requests not on the specified chain */
+function requireChain(requiredChainId) {
+  return (req, res, next) => {
+    if (req.chainId !== requiredChainId) {
+      const name = req.chainConfig?.displayName || req.chainId;
+      return res.status(400).json({
+        error: 'Not available',
+        message: `This feature is only available on Algorand`,
+      });
+    }
+    next();
+  };
+}
+
+const algorandOnly = requireChain('algorand-mainnet');
+
 module.exports = chainMiddleware;
+module.exports.requireChain = requireChain;
+module.exports.algorandOnly = algorandOnly;

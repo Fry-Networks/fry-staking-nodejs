@@ -5,21 +5,21 @@ const FeeConfig = require("../models/feeConfigSchema");
 const { getAsaUsdPrice } = require("./priceService");
 const { checkRequirements, computeMultiplier } = require("./requirementCheckerService");
 
-const INDEXER_BASE = 'https://mainnet-idx.4160.nodely.dev';
+const { getIndexerUrl } = require('./algodService');
 
 /**
  * Create a new device staking pool
  */
 async function createPool(poolData) {
   // Validate reward token exists via Indexer
-  const assetRes = await fetch(`${INDEXER_BASE}/v2/assets/${poolData.rewardTokenId}`);
+  const assetRes = await fetch(`${getIndexerUrl()}/v2/assets/${poolData.rewardTokenId}`);
   if (!assetRes.ok) {
     throw new Error(`Reward token ${poolData.rewardTokenId} not found on chain`);
   }
 
   // Validate collection creator if provided
   if (poolData.collectionCreator) {
-    const creatorRes = await fetch(`${INDEXER_BASE}/v2/accounts/${poolData.collectionCreator}`);
+    const creatorRes = await fetch(`${getIndexerUrl()}/v2/accounts/${poolData.collectionCreator}`);
     if (!creatorRes.ok) {
       throw new Error(`Collection creator address ${poolData.collectionCreator} not found`);
     }
@@ -92,7 +92,7 @@ async function stakeDevice(poolAppId, wallet, deviceNftId, deviceNftName) {
   if (pool.status !== 'active') throw new Error('Pool is not active');
 
   // Verify NFT ownership via Indexer
-  const nftRes = await fetch(`${INDEXER_BASE}/v2/accounts/${wallet}/assets?asset-id=${deviceNftId}`);
+  const nftRes = await fetch(`${getIndexerUrl()}/v2/accounts/${wallet}/assets?asset-id=${deviceNftId}`);
   if (!nftRes.ok) throw new Error('Failed to verify NFT ownership');
   const nftData = await nftRes.json();
   const heldAsset = nftData.assets?.[0];
@@ -103,7 +103,7 @@ async function stakeDevice(poolAppId, wallet, deviceNftId, deviceNftName) {
   // Verify collection membership
   if (pool.collectionMode === 'creator_address' || pool.collectionMode === 'both') {
     if (pool.collectionCreator) {
-      const assetRes = await fetch(`${INDEXER_BASE}/v2/assets/${deviceNftId}`);
+      const assetRes = await fetch(`${getIndexerUrl()}/v2/assets/${deviceNftId}`);
       if (assetRes.ok) {
         const assetData = await assetRes.json();
         const creator = assetData.asset?.params?.creator;

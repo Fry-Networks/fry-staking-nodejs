@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth, requireRewardsAdmin } = require('../middleware/auth');
+const { algorandOnly } = require('../middleware/chainMiddleware');
 const { validate, dailyRewardClaimSchema, rewardsConfigUpdateSchema, adminBanSchema } = require('../middleware/validate');
 const {
   getRewardsStatus,
@@ -13,6 +14,9 @@ const {
   adminBanWallet,
   adminUnbanWallet,
 } = require('../controllers/rewardsController');
+
+// All reward routes are Algorand-only (FRY token)
+router.use(algorandOnly);
 
 // Public routes
 router.get('/status', getRewardsStatus);

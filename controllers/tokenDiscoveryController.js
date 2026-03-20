@@ -2,7 +2,10 @@ const logger = require("../config/logger");
 const axios = require('axios');
 const Token = require('../models/tokensSchema');
 
-const INDEXER_BASE = 'https://mainnet-idx.4160.nodely.dev/v2';
+const { getIndexerUrl } = require('../services/algodService');
+const _getIndexerBaseV2 = (chainId) => `${getIndexerUrl(chainId)}/v2`;
+
+// Algorand-only third-party APIs (no Voi equivalents)
 const PERA_BASE = 'https://mainnet.api.perawallet.app/v1';
 const VESTIGE_BASE = 'https://api.vestigelabs.org';
 const TINYMAN_ANALYTICS = 'https://mainnet.analytics.tinyman.org/api/v1';
@@ -94,7 +97,7 @@ const lookupAsaById = async (req, res) => {
     }
 
     // Fetch from Algorand indexer
-    const indexerResp = await axios.get(`${INDEXER_BASE}/assets/${asaId}`, {
+    const indexerResp = await axios.get(`${_getIndexerBaseV2(req?.chainId)}/assets/${asaId}`, {
       timeout: REQUEST_TIMEOUT,
     });
     const asset = indexerResp.data?.asset;
@@ -358,7 +361,7 @@ async function resolveCreatorFromAsa(asaId) {
   if (cached && Date.now() < cached.expires) {
     return cached.creator;
   }
-  const resp = await axios.get(`${INDEXER_BASE}/assets/${asaId}`, { timeout: REQUEST_TIMEOUT });
+  const resp = await axios.get(`${_getIndexerBaseV2(req?.chainId)}/assets/${asaId}`, { timeout: REQUEST_TIMEOUT });
   const creator = resp.data?.asset?.params?.creator;
   if (!creator) throw new Error(`No creator found for ASA ${asaId}`);
   asaCreatorCache.set(asaId, { creator, expires: Date.now() + ASA_CREATOR_CACHE_TTL });
@@ -377,7 +380,7 @@ const lookupNftCollection = async (req, res) => {
     }
 
     // Fetch the asset to get creator
-    const assetResp = await axios.get(`${INDEXER_BASE}/assets/${asaId}`, { timeout: REQUEST_TIMEOUT });
+    const assetResp = await axios.get(`${_getIndexerBaseV2(req?.chainId)}/assets/${asaId}`, { timeout: REQUEST_TIMEOUT });
     const asset = assetResp.data?.asset;
     if (!asset) {
       return res.status(404).json({ success: false, message: 'Asset not found' });
@@ -392,7 +395,7 @@ const lookupNftCollection = async (req, res) => {
     asaCreatorCache.set(asaId, { creator, expires: Date.now() + ASA_CREATOR_CACHE_TTL });
 
     // Fetch sample assets by this creator
-    const creatorResp = await axios.get(`${INDEXER_BASE}/assets`, {
+    const creatorResp = await axios.get(`${_getIndexerBaseV2(req?.chainId)}/assets`, {
       params: { creator, limit: 10 },
       timeout: REQUEST_TIMEOUT,
     });
@@ -463,7 +466,7 @@ const verifyNftOwnership = async (req, res) => {
       const MAX_FETCHES = 5; // Limit pagination to prevent runaway requests
 
       do {
-        const url = `${INDEXER_BASE}/assets?creator=${creator}&limit=500${nextToken ? `&next=${nextToken}` : ''}`;
+        const url = `${_getIndexerBaseV2(req?.chainId)}/assets?creator=${creator}&limit=500${nextToken ? `&next=${nextToken}` : ''}`;
         const resp = await axios.get(url, { timeout: REQUEST_TIMEOUT });
         const assets = resp.data?.assets || [];
         for (const asset of assets) {
@@ -480,7 +483,7 @@ const verifyNftOwnership = async (req, res) => {
     // 2. Get wallet's ASA holdings
     let walletAssets;
     try {
-      const walletResp = await axios.get(`${INDEXER_BASE}/accounts/${wallet}/assets`, {
+      const walletResp = await axios.get(`${_getIndexerBaseV2(req?.chainId)}/accounts/${wallet}/assets`, {
         params: { limit: 1000 },
         timeout: REQUEST_TIMEOUT,
       });

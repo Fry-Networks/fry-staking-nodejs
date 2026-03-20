@@ -4,9 +4,9 @@ const algosdk = require("algosdk");
 const DevicePool = require("../models/devicePoolSchema");
 const DevicePosition = require("../models/devicePositionSchema");
 const { checkRequirements, computeMultiplier } = require("../services/requirementCheckerService");
-const { withFallback } = require("../services/algodService");
+const { withFallback, getIndexerUrl } = require("../services/algodService");
 
-const INDEXER_BASE = 'https://mainnet-idx.4160.nodely.dev';
+const INDEXER_BASE_URL = getIndexerUrl('algorand-mainnet');
 
 cron.schedule('*/15 * * * *', async () => {
   const start = Date.now();
@@ -34,7 +34,7 @@ cron.schedule('*/15 * * * *', async () => {
     // Check Indexer reachability
     let indexerReachable = true;
     try {
-      const testRes = await fetch(`${INDEXER_BASE}/health`);
+      const testRes = await fetch(`${INDEXER_BASE_URL}/health`);
       if (!testRes.ok) indexerReachable = false;
     } catch {
       indexerReachable = false;
@@ -67,7 +67,7 @@ cron.schedule('*/15 * * * *', async () => {
 
         // Verify wallet still holds NFT
         const nftRes = await fetch(
-          `${INDEXER_BASE}/v2/accounts/${position.wallet}/assets?asset-id=${position.deviceNftId}`
+          `${INDEXER_BASE_URL}/v2/accounts/${position.wallet}/assets?asset-id=${position.deviceNftId}`
         );
 
         let nftHeld = false;

@@ -1,9 +1,7 @@
 const logger = require("../config/logger");
 const AiInteraction = require("../models/aiInteractionSchema");
-
-const INDEXER_BASE = "https://mainnet-idx.4160.nodely.dev";
-const FRY_ASA_ID = 2485314946;
-const ADMIN_WALLET = "E2F2LT2INE75DBOYHQXTCTOP2PAP5MHAXQRXTTCCXFKHQTVG36DJONBQZE";
+const { getIndexerUrl } = require("./algodService");
+const { getChainConfig } = require("../config/chains");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -28,7 +26,14 @@ async function fetchWithRetry(url, maxRetries = 3) {
  * @param {string} senderWallet - Expected sender address
  * @returns {{ verified: boolean, error?: string }}
  */
-async function verifyFryPayment(txId, expectedAmount, senderWallet) {
+async function verifyFryPayment(txId, expectedAmount, senderWallet, chainId = 'algorand-mainnet') {
+  const chainConfig = getChainConfig(chainId);
+  const FRY_ASA_ID = chainConfig.fryTokenId;
+  const ADMIN_WALLET = chainConfig.feeRecipient;
+
+  if (!FRY_ASA_ID) {
+    return { verified: false, error: `FRY token not available on ${chainConfig.displayName}` };
+  }
   // Check replay: has this txId already been used?
   const existing = await AiInteraction.findOne({ paymentTxId: txId }).lean();
   if (existing) {
@@ -36,7 +41,7 @@ async function verifyFryPayment(txId, expectedAmount, senderWallet) {
   }
 
   // Query indexer for the transaction
-  const url = `${INDEXER_BASE}/v2/transactions/${txId}`;
+  const url = `${getIndexerUrl(chainId)}/v2/transactions/${txId}`;
   let res;
   try {
     res = await fetchWithRetry(url);
