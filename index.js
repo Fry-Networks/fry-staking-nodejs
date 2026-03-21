@@ -31,6 +31,7 @@ const deviceAccessRoutes = require('./routes/deviceAccessRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const chainMiddleware = require('./middleware/chainMiddleware');
 const chainRoutes = require('./routes/chainRoutes');
+const stakingClaimRoutes = require('./routes/stakingClaimRoutes');
 
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -126,6 +127,7 @@ app.use("/devicestaking", readLimiter, deviceStakingRoutes);
 app.use("/device-access", readLimiter, deviceAccessRoutes);
 app.use("/ai", writeLimiter, aiRoutes);
 app.use("/chains", readLimiter, chainRoutes);
+app.use("/staking-claim", readLimiter, stakingClaimRoutes);
 
 // 404 handler for undefined routes
 app.use((req, res) => {
