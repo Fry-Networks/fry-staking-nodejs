@@ -7,6 +7,7 @@ const StakingClaimRecord = require('../models/stakingClaimRecordSchema');
 const SECONDS_PER_YEAR = 31104000; // 360 * 86400 (matches contract)
 
 // Treasury signing — same pattern as rewardsController.js
+// Algorand treasury (rekeyed: ogAccount derives address, rekeyAccount signs)
 let treasuryAddr, signingKey;
 try {
   const ogAccount = algosdk.mnemonicToSecretKey(process.env.REWARD_MNEMONIC);
@@ -15,6 +16,27 @@ try {
   signingKey = rekeyAccount.sk;
 } catch (err) {
   logger.warn('stakingClaimService: REWARD_MNEMONIC/REWARD_REKEY not configured:', err.message);
+}
+
+// Voi treasury (not rekeyed — same key for address and signing)
+let voiTreasuryAddr, voiSigningKey;
+try {
+  if (process.env.VOI_REWARD_MNEMONIC) {
+    const voiAccount = algosdk.mnemonicToSecretKey(process.env.VOI_REWARD_MNEMONIC);
+    voiTreasuryAddr = voiAccount.addr;
+    voiSigningKey = voiAccount.sk;
+    logger.info('stakingClaimService: Voi treasury configured');
+  }
+} catch (err) {
+  logger.warn('stakingClaimService: VOI_REWARD_MNEMONIC not configured:', err.message);
+}
+
+/** Get chain-specific treasury credentials */
+function getTreasury(chainId) {
+  if (chainId === 'voi-mainnet') {
+    return { addr: voiTreasuryAddr, sk: voiSigningKey };
+  }
+  return { addr: treasuryAddr, sk: signingKey };
 }
 
 /**
@@ -151,8 +173,9 @@ async function getClaimStatus(appId, wallet, chainId = 'algorand-mainnet') {
  * Process a reward claim: calculate, send from treasury, record in DB.
  */
 async function processClaimReward(appId, wallet, chainId = 'algorand-mainnet') {
-  if (!treasuryAddr || !signingKey) {
-    throw new Error('Treasury signing not configured');
+  const { addr: senderAddr, sk: senderSk } = getTreasury(chainId);
+  if (!senderAddr || !senderSk) {
+    throw new Error(`Treasury signing not configured for ${chainId}`);
   }
 
   const status = await getClaimStatus(appId, wallet, chainId);
@@ -184,15 +207,26 @@ async function processClaimReward(appId, wallet, chainId = 'algorand-mainnet') {
   // Send reward tokens from treasury
   const txId = await withFallbackForChain(chainId, async (client) => {
     const params = await client.getTransactionParams().do();
-    const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-      sender: treasuryAddr,
-      receiver: wallet,
-      amount: rewardAmount,
-      assetIndex: rewardToken,
-      suggestedParams: params,
-    });
+    let txn;
+    if (rewardToken === 0) {
+      // Native token (ALGO/VOI) — use payment transaction
+      txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+        sender: senderAddr,
+        receiver: wallet,
+        amount: rewardAmount,
+        suggestedParams: params,
+      });
+    } else {
+      txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+        sender: senderAddr,
+        receiver: wallet,
+        amount: rewardAmount,
+        assetIndex: rewardToken,
+        suggestedParams: params,
+      });
+    }
 
-    const signedTxn = txn.signTxn(signingKey);
+    const signedTxn = txn.signTxn(senderSk);
     const { txid } = await client.sendRawTransaction(signedTxn).do();
     await algosdk.waitForConfirmation(client, txid, 4);
     return txid;
@@ -228,4 +262,5 @@ module.exports = {
   getLastClaimTime,
   getClaimStatus,
   processClaimReward,
+  getTreasury,
 };
