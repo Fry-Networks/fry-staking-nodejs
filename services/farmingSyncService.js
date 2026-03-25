@@ -21,12 +21,12 @@ async function syncFarmingPool(pool) {
     const onChainTotalStaked = onChain.totalStaked / 1_000_000;
     const onChainTotalFarmers = onChain.totalFarmers || onChain.totalStakers;
     const onChainRewardsDistributed = onChain.rewardsDistributed / 1_000_000;
-    const onChainApr = onChain.apr;
+    const onChainApr = onChain.apr / 100;
 
     const stakedDiffers = Math.abs((pool.totalStaked || 0) - onChainTotalStaked) > 0.000001;
     const farmersDiffers = (pool.totalFarmers || 0) !== onChainTotalFarmers;
     const rewardsDiffers = Math.abs((pool.rewardsDistributed || 0) - onChainRewardsDistributed) > 0.000001;
-    const aprDiffers = (pool.aprRate || 0) !== onChainApr;
+    const aprDiffers = Math.abs((pool.aprRate || 0) - onChainApr) > 0.001;
 
     if (!stakedDiffers && !farmersDiffers && !rewardsDiffers && !aprDiffers) {
       await Farming.updateOne(
