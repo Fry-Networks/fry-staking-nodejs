@@ -91,6 +91,8 @@ async function readPoolGlobalState(appId, chainId = 'algorand-mainnet') {
     stakeEndTime: state.stake_end_time || 0,
     stakeStartTime: state.stake_start_time || 0,
     totalStaked: state.total_staked || 0,
+    totalStakers: state.total_stakers || 0,
+    rewardsDistributed: state.rewards_distributed || 0,
     poolTime: state.pool_time || 0,
     stakeToken: state.stake_token || 0,
     authority: state.authority,
@@ -196,53 +198,73 @@ async function processClaimReward(appId, wallet, chainId = 'algorand-mainnet') {
   const rewardToken = status.rewardToken;
   const now = Math.floor(Date.now() / 1000);
 
-  // Check for replay — has this wallet already claimed recently?
-  const recentClaim = await StakingClaimRecord.findOne({
-    wallet, appId, claimedAt: { $gte: new Date(Date.now() - 60000) }, // 1 min cooldown
-  });
-  if (recentClaim) {
+  // Atomic cooldown claim — prevents race conditions
+  const pendingRecord = await StakingClaimRecord.findOneAndUpdate(
+    {
+      wallet,
+      appId,
+      claimedAt: { $gte: new Date(Date.now() - 60000) }, // 1 min cooldown
+    },
+    {
+      $setOnInsert: {
+        wallet,
+        appId,
+        chainId,
+        amount: 0,
+        txId: `pending-${Date.now()}-${wallet.slice(0, 8)}`,
+        claimedAt: new Date(),
+        periodStart: new Date(status.periodStart * 1000),
+        periodEnd: new Date(now * 1000),
+      },
+    },
+    { upsert: true, new: true, rawResult: true }
+  );
+
+  if (!pendingRecord.lastErrorObject?.upserted) {
     throw new Error('Claim already processed. Please wait before claiming again.');
   }
+  const pendingId = pendingRecord.value._id;
 
   // Send reward tokens from treasury
-  const txId = await withFallbackForChain(chainId, async (client) => {
-    const params = await client.getTransactionParams().do();
-    let txn;
-    if (rewardToken === 0) {
-      // Native token (ALGO/VOI) — use payment transaction
-      txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-        sender: senderAddr,
-        receiver: wallet,
-        amount: rewardAmount,
-        suggestedParams: params,
-      });
-    } else {
-      txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-        sender: senderAddr,
-        receiver: wallet,
-        amount: rewardAmount,
-        assetIndex: rewardToken,
-        suggestedParams: params,
-      });
-    }
+  let txId;
+  try {
+    txId = await withFallbackForChain(chainId, async (client) => {
+      const params = await client.getTransactionParams().do();
+      let txn;
+      if (rewardToken === 0) {
+        // Native token (ALGO/VOI) — use payment transaction
+        txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+          sender: senderAddr,
+          receiver: wallet,
+          amount: rewardAmount,
+          suggestedParams: params,
+        });
+      } else {
+        txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+          sender: senderAddr,
+          receiver: wallet,
+          amount: rewardAmount,
+          assetIndex: rewardToken,
+          suggestedParams: params,
+        });
+      }
 
-    const signedTxn = txn.signTxn(senderSk);
-    const { txid } = await client.sendRawTransaction(signedTxn).do();
-    await algosdk.waitForConfirmation(client, txid, 4);
-    return txid;
-  });
+      const signedTxn = txn.signTxn(senderSk);
+      const { txid } = await client.sendRawTransaction(signedTxn).do();
+      await algosdk.waitForConfirmation(client, txid, 4);
+      return txid;
+    });
+  } catch (sendErr) {
+    // On-chain send failed — delete pending record so user can retry
+    await StakingClaimRecord.deleteOne({ _id: pendingId });
+    throw sendErr;
+  }
 
-  // Record in MongoDB
-  const record = await StakingClaimRecord.create({
-    wallet,
-    appId,
-    chainId,
-    amount: rewardAmount,
-    txId,
-    claimedAt: new Date(),
-    periodStart: new Date(status.periodStart * 1000),
-    periodEnd: new Date(now * 1000),
-  });
+  // Update pending record with real txId and amount
+  await StakingClaimRecord.updateOne(
+    { _id: pendingId },
+    { $set: { txId, amount: rewardAmount } }
+  );
 
   logger.info(`Staking claim: ${wallet} claimed ${rewardAmount / 1e6} tokens from pool ${appId}, txId=${txId}`);
 
@@ -250,14 +272,84 @@ async function processClaimReward(appId, wallet, chainId = 'algorand-mainnet') {
     txId,
     amount: rewardAmount,
     amountDisplay: rewardAmount / 1_000_000,
-    claimedAt: record.claimedAt,
+    claimedAt: new Date(),
     rewardToken,
+  };
+}
+
+/**
+ * Read farming pool global state from the contract.
+ * Keys: total_staked, total_farmers, total_stakers, rewards_distributed, apr.
+ */
+async function readFarmingPoolGlobalState(appId, chainId = 'algorand-mainnet') {
+  const client = getAlgodClientForChain(chainId);
+  const appInfo = await client.getApplicationByID(appId).do();
+  const gs = appInfo.params.globalState || appInfo.params['global-state'] || [];
+
+  const state = {};
+  for (const item of gs) {
+    const key = typeof item.key === 'string'
+      ? Buffer.from(item.key, 'base64').toString('utf8')
+      : Buffer.from(item.key).toString('utf8');
+    if (item.value.type === 2) {
+      state[key] = Number(item.value.uint);
+    } else if (item.value.type === 1) {
+      const bytes = typeof item.value.bytes === 'string'
+        ? Buffer.from(item.value.bytes, 'base64')
+        : Buffer.from(item.value.bytes);
+      state[key] = bytes;
+    }
+  }
+
+  return {
+    totalStaked: state.total_staked || 0,
+    totalFarmers: state.total_farmers || 0,
+    totalStakers: state.total_stakers || 0,
+    rewardsDistributed: state.rewards_distributed || 0,
+    apr: state.apr || 0,
+  };
+}
+
+/**
+ * Read NFT staking pool global state from the contract.
+ * Keys: total_nfts_staked, total_rewards_claimed, total_reward_pool,
+ * total_reward_balance, is_active, rate_per_day.
+ */
+async function readNftStakingPoolGlobalState(appId, chainId = 'algorand-mainnet') {
+  const client = getAlgodClientForChain(chainId);
+  const appInfo = await client.getApplicationByID(appId).do();
+  const gs = appInfo.params.globalState || appInfo.params['global-state'] || [];
+
+  const state = {};
+  for (const item of gs) {
+    const key = typeof item.key === 'string'
+      ? Buffer.from(item.key, 'base64').toString('utf8')
+      : Buffer.from(item.key).toString('utf8');
+    if (item.value.type === 2) {
+      state[key] = Number(item.value.uint);
+    } else if (item.value.type === 1) {
+      const bytes = typeof item.value.bytes === 'string'
+        ? Buffer.from(item.value.bytes, 'base64')
+        : Buffer.from(item.value.bytes);
+      state[key] = bytes;
+    }
+  }
+
+  return {
+    totalNftsStaked: state.total_nfts_staked || 0,
+    totalRewardsClaimed: state.total_rewards_claimed || 0,
+    totalRewardPool: state.total_reward_pool || 0,
+    totalRewardBalance: state.total_reward_balance || 0,
+    isActive: state.is_active || 0,
+    ratePerDay: state.rate_per_day || 0,
   };
 }
 
 module.exports = {
   readUserBoxState,
   readPoolGlobalState,
+  readFarmingPoolGlobalState,
+  readNftStakingPoolGlobalState,
   calculateReward,
   getLastClaimTime,
   getClaimStatus,

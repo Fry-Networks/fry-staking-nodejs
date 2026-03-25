@@ -134,6 +134,10 @@ const farmingSchema = new mongoose.Schema({
     },
     default: {},
   },
+  lastOnChainSync: {
+    type: Date,
+    default: null,
+  },
 });
 
 const Farming = mongoose.model("Farming", farmingSchema, "farmingPools");

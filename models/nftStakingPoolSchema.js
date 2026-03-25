@@ -118,6 +118,14 @@ const nftStakingPoolSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  totalRewardBalance: {
+    type: Number,
+    default: 0,
+  },
+  lastOnChainSync: {
+    type: Date,
+    default: null,
+  },
 });
 
 const NftStakingPool = mongoose.model("NftStakingPool", nftStakingPoolSchema, "nftStakingPools");
