@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { algorandOnly } = require('../middleware/chainMiddleware');
 const {
   proxyFolksQuote,
   proxyFolksPrepare,
@@ -8,6 +9,9 @@ const {
   proxyDeflexQuote,
   proxyDeflexTransactions,
 } = require('../controllers/swapProxyController');
+
+// All swap proxy routes are Algorand-only (Folks, Vestige, Deflex)
+router.use(algorandOnly);
 
 // FolksRouter
 router.get('/folks/quote', proxyFolksQuote);

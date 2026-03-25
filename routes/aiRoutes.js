@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { requireAuth } = require("../middleware/auth");
+const { chainAwareAuth } = require("../middleware/auth");
 const {
   getPrices,
   analyzePool,
@@ -9,8 +9,8 @@ const {
 } = require("../controllers/aiController");
 
 router.get("/prices", getPrices);
-router.post("/analyze-pool", requireAuth, analyzePool);
-router.post("/analyze-portfolio", requireAuth, analyzePortfolio);
-router.post("/analyze-swap", requireAuth, analyzeSwap);
+router.post("/analyze-pool", chainAwareAuth, analyzePool);
+router.post("/analyze-portfolio", chainAwareAuth, analyzePortfolio);
+router.post("/analyze-swap", chainAwareAuth, analyzeSwap);
 
 module.exports = router;

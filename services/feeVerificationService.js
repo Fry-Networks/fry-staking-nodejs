@@ -1,7 +1,6 @@
 const logger = require("../config/logger");
 const GasFee = require("../models/gasFeeSchema");
-
-const INDEXER_BASE = "https://mainnet-idx.4160.nodely.dev";
+const { getIndexerUrl } = require("./algodService");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -36,7 +35,7 @@ async function fetchWithRetry(url, maxRetries = 3) {
  * @param {number} [params.tolerancePercent=2] - Acceptable variance below expectedMinAmount
  * @returns {Promise<{verified: boolean, amount?: number, error?: string}>}
  */
-async function verifyFeeTransaction(txId, { senderWallet, feeRecipient, assetId, expectedMinAmount, tolerancePercent = 2 }) {
+async function verifyFeeTransaction(txId, { senderWallet, feeRecipient, assetId, expectedMinAmount, tolerancePercent = 2 }, chainId = 'algorand-mainnet') {
   // 1. Replay check — has this txId already been recorded?
   const existing = await GasFee.findOne({ txId }).lean();
   if (existing) {
@@ -44,7 +43,7 @@ async function verifyFeeTransaction(txId, { senderWallet, feeRecipient, assetId,
   }
 
   // 2. Query indexer for the transaction
-  const url = `${INDEXER_BASE}/v2/transactions/${txId}`;
+  const url = `${getIndexerUrl(chainId)}/v2/transactions/${txId}`;
   let res;
   try {
     res = await fetchWithRetry(url);
@@ -115,9 +114,9 @@ async function verifyFeeTransaction(txId, { senderWallet, feeRecipient, assetId,
  * Verify with retry — polls indexer up to maxAttempts times with delay between.
  * Handles the 2-8 second indexer lag after on-chain confirmation.
  */
-async function verifyFeeTransactionWithRetry(txId, params, maxAttempts = 3, delayMs = 3000) {
+async function verifyFeeTransactionWithRetry(txId, params, chainId = 'algorand-mainnet', maxAttempts = 3, delayMs = 3000) {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const result = await verifyFeeTransaction(txId, params);
+    const result = await verifyFeeTransaction(txId, params, chainId);
 
     // If verified or a definitive rejection (not just "not found yet"), return immediately
     if (result.verified) return result;

@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const stakerDataSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   walletId: {
     type: String,
     required: true,
@@ -19,7 +25,15 @@ const stakerDataSchema = new mongoose.Schema({
   },
   rewardClaimed: {
     type: Number,
-    default: 0, 
+    default: 0,
+  },
+  feeTxId: {
+    type: String,
+    default: '',
+  },
+  feeAssetId: {
+    type: Number,
+    default: 0,
   },
 });
 

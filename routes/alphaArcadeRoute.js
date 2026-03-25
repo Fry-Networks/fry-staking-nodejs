@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { algorandOnly } = require('../middleware/chainMiddleware');
 const {
   validate,
   alphaArcadePoolSchema,
@@ -34,6 +35,9 @@ const {
   getStats,
   getPlatformStats,
 } = require('../controllers/alphaArcadeController');
+
+// All Alpha Arcade routes are Algorand-only
+router.use(algorandOnly);
 
 // Stats routes
 router.get('/stats', getStats);

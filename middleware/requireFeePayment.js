@@ -76,12 +76,14 @@ function requireFeePayment(operationType, getBaseAmount) {
         return res.status(401).json({ success: false, error: "Authentication required" });
       }
 
+      const chainFeeRecipient = req.chainConfig?.feeRecipient || config.feeRecipient;
+      const retryConfig = req.chainConfig?.indexerRetry || { maxAttempts: 3, delayMs: 3000 };
       const result = await verifyFeeTransactionWithRetry(feeTxId, {
         senderWallet,
-        feeRecipient: config.feeRecipient,
+        feeRecipient: chainFeeRecipient,
         assetId: feeAssetId || 0,
         expectedMinAmount: expectedFee,
-      });
+      }, req.chainId, retryConfig.maxAttempts, retryConfig.delayMs);
 
       if (!result.verified) {
         logger.warn(

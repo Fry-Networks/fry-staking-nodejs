@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const alphaArcadePositionSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   wallet:              { type: String, required: true },
   poolId:              { type: String, required: true },
   marketAppId:         { type: Number, required: true },

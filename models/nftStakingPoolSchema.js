@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const nftStakingPoolSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   creatorId: {
     type: String,
     required: true,
@@ -111,6 +117,14 @@ const nftStakingPoolSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now,
+  },
+  totalRewardBalance: {
+    type: Number,
+    default: 0,
+  },
+  lastOnChainSync: {
+    type: Date,
+    default: null,
   },
 });
 

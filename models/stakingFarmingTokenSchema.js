@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const stakingFarmingTokenSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   // Associated pool
   poolId: {
     type: String,

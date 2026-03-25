@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const nftStakedTokenSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   wallet: {
     type: String,
     required: true,

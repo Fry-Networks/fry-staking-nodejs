@@ -9,7 +9,7 @@ const StakingFarmingToken = require("../models/stakingFarmingTokenSchema");
 const requirementCache = new Map();
 const REQUIREMENT_TTL = 5 * 60 * 1000; // 5 minutes
 
-const INDEXER_BASE = 'https://mainnet-idx.4160.nodely.dev';
+const { getIndexerUrl } = require('./algodService');
 const blockTimestampCache = new Map(); // permanent — block timestamps never change
 
 // Cleanup expired cache entries every 5 min
@@ -25,7 +25,7 @@ setInterval(() => {
  */
 async function getBlockTimestamp(round) {
   if (blockTimestampCache.has(round)) return blockTimestampCache.get(round);
-  const res = await fetch(`${INDEXER_BASE}/v2/blocks/${round}`);
+  const res = await fetch(`${getIndexerUrl()}/v2/blocks/${round}`);
   if (!res.ok) return null;
   const data = await res.json();
   const timestamp = data.timestamp || null;
@@ -42,7 +42,7 @@ async function checkSingleRequirement(wallet, requirement) {
   try {
     switch (type) {
       case 'token_balance': {
-        const res = await fetch(`${INDEXER_BASE}/v2/accounts/${wallet}`);
+        const res = await fetch(`${getIndexerUrl()}/v2/accounts/${wallet}`);
         if (!res.ok) return { met: false, details: 'Indexer unavailable' };
         const data = await res.json();
         const assets = data.account?.assets || [];
@@ -71,7 +71,7 @@ async function checkSingleRequirement(wallet, requirement) {
 
       case 'nft_holding': {
         if (params.asaId) {
-          const res = await fetch(`${INDEXER_BASE}/v2/accounts/${wallet}/assets?asset-id=${params.asaId}`);
+          const res = await fetch(`${getIndexerUrl()}/v2/accounts/${wallet}/assets?asset-id=${params.asaId}`);
           if (!res.ok) return { met: false, details: 'Indexer unavailable' };
           const data = await res.json();
           const asset = data.assets?.[0];
@@ -79,7 +79,7 @@ async function checkSingleRequirement(wallet, requirement) {
           return { met: !!met, details: met ? 'NFT held' : 'NFT not held' };
         }
         if (params.creatorAddress) {
-          const res = await fetch(`${INDEXER_BASE}/v2/accounts/${wallet}/assets?limit=500`);
+          const res = await fetch(`${getIndexerUrl()}/v2/accounts/${wallet}/assets?limit=500`);
           if (!res.ok) return { met: false, details: 'Indexer unavailable' };
           const data = await res.json();
           const assets = data.assets || [];
@@ -88,7 +88,7 @@ async function checkSingleRequirement(wallet, requirement) {
           for (const asset of assets) {
             if (asset.amount > 0) {
               try {
-                const assetRes = await fetch(`${INDEXER_BASE}/v2/assets/${asset['asset-id']}`);
+                const assetRes = await fetch(`${getIndexerUrl()}/v2/assets/${asset['asset-id']}`);
                 if (assetRes.ok) {
                   const assetData = await assetRes.json();
                   if (assetData.asset?.params?.creator === params.creatorAddress) {
@@ -113,7 +113,7 @@ async function checkSingleRequirement(wallet, requirement) {
       }
 
       case 'wallet_age': {
-        const res = await fetch(`${INDEXER_BASE}/v2/accounts/${wallet}`);
+        const res = await fetch(`${getIndexerUrl()}/v2/accounts/${wallet}`);
         if (!res.ok) return { met: false, details: 'Indexer unavailable' };
         const data = await res.json();
         const createdAtRound = data.account?.['created-at-round'];
@@ -211,7 +211,7 @@ async function computeMultiplier(wallet, pool, position) {
         }
 
         case 'token_balance': {
-          const res = await fetch(`${INDEXER_BASE}/v2/accounts/${wallet}`);
+          const res = await fetch(`${getIndexerUrl()}/v2/accounts/${wallet}`);
           if (!res.ok) break;
           const data = await res.json();
           const assets = data.account?.assets || [];

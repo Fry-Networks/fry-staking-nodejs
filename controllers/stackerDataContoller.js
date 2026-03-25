@@ -39,9 +39,9 @@ const getStakerDataByWalletId = async (req, res) => {
   
  
       if (stakerData.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: `No staker data found for wallet ID: ${walletId}.`,
+        return res.status(200).json({
+          success: true,
+          data: [],
         });
       }
   
@@ -70,21 +70,33 @@ const getStakerDataByWalletId = async (req, res) => {
 // addStakerData controller
 const addStakerData = async (req, res) => {
     try {
-      const { walletId, stakedAmount, stakeTime, poolId, rewardClaimed } = req.body;
-  
+      const { walletId, stakedAmount, stakeTime, poolId, rewardClaimed, feeTxId, feeAssetId } = req.body;
+
       if (!walletId || stakedAmount == null || stakeTime == null || !poolId) {
         return res.status(400).json({
           success: false,
           message: "Missing required fields: walletId, stakedAmount, stakeTime, or poolId.",
         });
       }
-  
+
+      // Verify wallet matches authenticated user
+      if (walletId !== req.user.wallet) {
+        return res.status(403).json({
+          success: false,
+          message: "Wallet does not match authenticated user",
+        });
+      }
+
+      const chainId = req.chainId || 'algorand-mainnet';
       const newStakerData = new StakerData({
+        chainId,
         walletId,
         stakedAmount,
         stakeTime,
         poolId,
-        rewardClaimed: rewardClaimed || 0, 
+        rewardClaimed: rewardClaimed || 0,
+        feeTxId: feeTxId || '',
+        feeAssetId: feeAssetId || 0,
       });
   
       const savedStakerData = await newStakerData.save();

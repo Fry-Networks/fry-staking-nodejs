@@ -3,6 +3,10 @@ const ClaimReward = require('../models/claimRewardSchema');
 // Add a new claimed reward
 const addClaimReward = async (req, res) => {
   try {
+    // Verify wallet matches authenticated user
+    if (req.body.walletId && req.body.walletId !== req.user.wallet) {
+      return res.status(403).json({ success: false, message: 'Wallet does not match authenticated user' });
+    }
     const newClaim = new ClaimReward(req.body);
     const savedClaim = await newClaim.save();
     res.status(201).json({ success: true, data: savedClaim });

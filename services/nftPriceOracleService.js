@@ -18,7 +18,8 @@ function setCache(key, value) {
 }
 
 // --- Constants ---
-const INDEXER_BASE = 'https://mainnet-idx.4160.nodely.dev/v2';
+const { getIndexerUrl } = require('./algodService');
+const _getIndexerBaseV2 = () => `${getIndexerUrl()}/v2`;
 const PERA_BASE = 'https://mainnet.api.perawallet.app/v1/public';
 const CACHE_1HR = 60 * 60 * 1000;
 const CACHE_6HR = 6 * 60 * 60 * 1000;
@@ -89,7 +90,7 @@ async function fetchLastSalePrice(asaId) {
 
   try {
     const res = await axios.get(
-      `${INDEXER_BASE}/assets/${asaId}/transactions`,
+      `${_getIndexerBaseV2()}/assets/${asaId}/transactions`,
       {
         params: { 'tx-type': 'axfer', limit: 50 },
         timeout: REQUEST_TIMEOUT,
@@ -103,7 +104,7 @@ async function fetchLastSalePrice(asaId) {
 
       try {
         const groupRes = await axios.get(
-          `${INDEXER_BASE}/transactions`,
+          `${_getIndexerBaseV2()}/transactions`,
           {
             params: { group: tx.group, limit: 10 },
             timeout: REQUEST_TIMEOUT,

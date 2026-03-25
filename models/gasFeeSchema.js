@@ -2,6 +2,12 @@ const mongoose = require("mongoose");
 
 const gasFeeSchema = new mongoose.Schema(
   {
+    chainId: {
+      type: String,
+      default: 'algorand-mainnet',
+      enum: ['algorand-mainnet', 'voi-mainnet'],
+      index: true,
+    },
     appId: {
       type: Number,
       required: true,

@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const farmingSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   creatorId: {
     type: String,
     required: true,
@@ -127,6 +133,10 @@ const farmingSchema = new mongoose.Schema({
       gateMessage: { type: String, default: 'This pool requires an NFT to participate.' },
     },
     default: {},
+  },
+  lastOnChainSync: {
+    type: Date,
+    default: null,
   },
 });
 

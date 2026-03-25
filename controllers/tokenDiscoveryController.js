@@ -2,18 +2,44 @@ const logger = require("../config/logger");
 const axios = require('axios');
 const Token = require('../models/tokensSchema');
 
-const INDEXER_BASE = 'https://mainnet-idx.4160.nodely.dev/v2';
+const { getIndexerUrl } = require('../services/algodService');
+const _getIndexerBaseV2 = (chainId) => `${getIndexerUrl(chainId)}/v2`;
+
+// Algorand-only third-party APIs (no Voi equivalents)
 const PERA_BASE = 'https://mainnet.api.perawallet.app/v1';
 const VESTIGE_BASE = 'https://api.vestigelabs.org';
 const TINYMAN_ANALYTICS = 'https://mainnet.analytics.tinyman.org/api/v1';
 const PACT_API = 'https://api.pact.fi/api/internal';
 const TINYMAN_CDN = 'https://asa-list.tinyman.org/assets';
 
+const NOMADEX_BASE = 'https://voimain-analytics.nomadex.app';
+let nomadexCache = { tokens: [], expires: 0 };
+const NOMADEX_CACHE_TTL = 30 * 60 * 1000; // 30 min
+
 const REQUEST_TIMEOUT = 8000;
 
 let algoUsdCache = { rate: null, expires: 0 };
 const PRICE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const USDC_ASA_ID = 31566704;
+
+async function getNomadexTokens() {
+  if (nomadexCache.tokens.length && Date.now() < nomadexCache.expires) {
+    return nomadexCache.tokens;
+  }
+  try {
+    const resp = await axios.get(`${NOMADEX_BASE}/tokens`, { timeout: 5000 });
+    nomadexCache.tokens = resp.data || [];
+    nomadexCache.expires = Date.now() + NOMADEX_CACHE_TTL;
+    return nomadexCache.tokens;
+  } catch (err) {
+    // Return stale cache on timeout/error instead of throwing
+    if (nomadexCache.tokens.length) {
+      logger.warn('Nomadex fetch failed, returning stale cache:', err.message);
+      return nomadexCache.tokens;
+    }
+    throw err;
+  }
+}
 
 async function getAlgoUsdRate() {
   if (algoUsdCache.rate && Date.now() < algoUsdCache.expires) {
@@ -35,10 +61,35 @@ const ALGO_TOKEN = {
 };
 
 /**
- * Resolve the best image URL for a token.
- * Pera API first, then Tinyman CDN fallback.
+ * Return the native token object for the current chain.
  */
-async function resolveTokenImage(asaId) {
+const NATIVE_TOKEN_IMAGES = {
+  ALGO: `${TINYMAN_CDN}/0/icon.png`,
+  VOI: '',
+};
+
+function getNativeToken(chainConfig) {
+  if (!chainConfig || !chainConfig.nativeAsset) return ALGO_TOKEN;
+  const na = chainConfig.nativeAsset;
+  return {
+    id: na.id ?? 0,
+    name: na.name,
+    symbol: na.symbol,
+    image: NATIVE_TOKEN_IMAGES[na.symbol] || '',
+    decimals: na.decimals ?? 6,
+    verified: true,
+  };
+}
+
+/**
+ * Resolve the best image URL for a token.
+ * Pera API first (Algorand only), then Tinyman CDN fallback.
+ */
+async function resolveTokenImage(asaId, chainId) {
+  // Skip Algorand-only image sources for Voi
+  if (chainId === 'voi-mainnet') {
+    return '';
+  }
   try {
     const resp = await axios.get(`${PERA_BASE}/assets/${asaId}/`, { timeout: 5000 });
     const logo = resp.data?.logo;
@@ -62,23 +113,18 @@ const lookupAsaById = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid ASA ID' });
     }
 
-    // Special case: ALGO (ID 0)
+    // Special case: native token (ID 0)
     if (asaId === 0) {
       return res.json({
         success: true,
-        data: {
-          id: 0,
-          name: 'Algorand',
-          symbol: 'ALGO',
-          image: `${TINYMAN_CDN}/0/icon.png`,
-          decimals: 6,
-          verified: true,
-        },
+        data: getNativeToken(req.chainConfig),
       });
     }
 
-    // Check DB first
-    const dbToken = await Token.findOne({ tokenId: asaId });
+    const chainId = req.chainId || 'algorand-mainnet';
+
+    // Check DB first (chain-aware)
+    const dbToken = await Token.findOne({ tokenId: asaId, chainId });
     if (dbToken) {
       return res.json({
         success: true,
@@ -94,7 +140,7 @@ const lookupAsaById = async (req, res) => {
     }
 
     // Fetch from Algorand indexer
-    const indexerResp = await axios.get(`${INDEXER_BASE}/assets/${asaId}`, {
+    const indexerResp = await axios.get(`${_getIndexerBaseV2(req?.chainId)}/assets/${asaId}`, {
       timeout: REQUEST_TIMEOUT,
     });
     const asset = indexerResp.data?.asset;
@@ -106,14 +152,15 @@ const lookupAsaById = async (req, res) => {
     const name = params.name || `Asset ${asaId}`;
     const symbol = params['unit-name'] || name;
     const decimals = params.decimals ?? 6;
-    const image = await resolveTokenImage(asaId);
+    const image = await resolveTokenImage(asaId, chainId);
 
     // Cache into DB for future lookups
     try {
       await Token.findOneAndUpdate(
-        { tokenId: asaId },
+        { tokenId: asaId, chainId },
         {
           tokenId: asaId,
+          chainId,
           tokenName: name,
           tokenSymbol: symbol,
           tokenImage: image,
@@ -154,10 +201,13 @@ const searchTokensByName = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Query too long' });
     }
 
+    const chainId = req.chainId || 'algorand-mainnet';
+    const nativeToken = getNativeToken(req.chainConfig);
+
     // Empty query: return popular/default tokens
     if (!q) {
-      const popular = await Token.find({}).sort({ verified: -1 }).limit(20);
-      const results = [ALGO_TOKEN, ...popular.map((t) => ({
+      const popular = await Token.find({ chainId, tokenId: { $ne: 0 } }).sort({ verified: -1 }).limit(20);
+      const results = [nativeToken, ...popular.map((t) => ({
         id: t.tokenId,
         name: t.tokenName,
         symbol: t.tokenSymbol,
@@ -165,13 +215,31 @@ const searchTokensByName = async (req, res) => {
         decimals: t.decimals,
         verified: t.verified || false,
       }))];
+
+      if (chainId === 'voi-mainnet' && results.length < 20) {
+        try {
+          const nomadexTokens = await getNomadexTokens();
+          const existingIds = new Set(results.map((r) => r.id));
+          for (const nt of nomadexTokens) {
+            if (existingIds.has(nt.id)) continue;
+            results.push({
+              id: nt.id, name: nt.name, symbol: nt.symbol,
+              image: '', decimals: nt.decimals ?? 6, verified: false,
+            });
+            existingIds.add(nt.id);
+            if (results.length >= 20) break;
+          }
+        } catch { /* Nomadex unavailable */ }
+      }
+
       return res.json({ success: true, data: results });
     }
 
     const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-    // Search DB
+    // Search DB (chain-aware)
     const dbResults = await Token.find({
+      chainId,
       $or: [
         { tokenName: { $regex: escaped, $options: 'i' } },
         { tokenSymbol: { $regex: escaped, $options: 'i' } },
@@ -187,8 +255,8 @@ const searchTokensByName = async (req, res) => {
       verified: t.verified || false,
     }));
 
-    // If fewer than 5 DB results, also query Vestige
-    if (results.length < 5) {
+    // If fewer than 5 DB results, also query Vestige (Algorand only)
+    if (results.length < 5 && chainId !== 'voi-mainnet') {
       try {
         const vestigeResp = await axios.get(`${VESTIGE_BASE}/assets`, {
           params: { query: q },
@@ -215,14 +283,36 @@ const searchTokensByName = async (req, res) => {
       }
     }
 
-    // Inject ALGO if query matches — replace any existing ID 0 with canonical ALGO_TOKEN
+    if (results.length < 5 && chainId === 'voi-mainnet') {
+      try {
+        const nomadexTokens = await getNomadexTokens();
+        const existingIds = new Set(results.map((r) => r.id));
+        const queryLower = q.toLowerCase();
+        for (const nt of nomadexTokens) {
+          if (existingIds.has(nt.id)) continue;
+          if (!nt.name.toLowerCase().includes(queryLower) &&
+              !nt.symbol.toLowerCase().includes(queryLower)) continue;
+          results.push({
+            id: nt.id, name: nt.name || `Asset ${nt.id}`,
+            symbol: nt.symbol || 'UNKNOWN', image: '',
+            decimals: nt.decimals ?? 6, verified: false,
+          });
+          existingIds.add(nt.id);
+          if (results.length >= 20) break;
+        }
+      } catch { /* Nomadex unavailable */ }
+    }
+
+    // Inject native token if query matches its name/symbol
     const ql = q.toLowerCase();
-    if ('algorand'.includes(ql) || 'algo'.includes(ql)) {
+    const nativeName = nativeToken.name.toLowerCase();
+    const nativeSymbol = nativeToken.symbol.toLowerCase();
+    if (nativeName.includes(ql) || nativeSymbol.includes(ql)) {
       const idx = results.findIndex((r) => r.id === 0);
       if (idx >= 0) {
         results.splice(idx, 1);
       }
-      results.unshift(ALGO_TOKEN);
+      results.unshift(nativeToken);
     }
 
     return res.json({ success: true, data: results });
@@ -318,11 +408,32 @@ const discoverLpTokens = async (req, res) => {
 
 /**
  * GET /tokens/price/:asaId
- * Proxy for Vestige price API (returns 530 when called directly from browser).
+ * Chain-aware price proxy: Vestige for Algorand, Nomadex for Voi.
  */
 const getTokenPrice = async (req, res) => {
   const { asaId } = req.params;
+  const chainId = req.chainId || 'algorand-mainnet';
+
   try {
+    if (chainId === 'voi-mainnet') {
+      // Voi: use Nomadex for token prices
+      const tokens = await getNomadexTokens();
+      if (String(asaId) === '0') {
+        // Native VOI — Nomadex may not list it; return from pool data if available
+        const voiToken = tokens.find(t => t.id === 0 || t.symbol === 'VOI');
+        if (voiToken?.price) {
+          return res.json({ price: voiToken.price, priceNative: 1, source: 'nomadex' });
+        }
+        return res.json({ price: null, source: 'unavailable' });
+      }
+      const token = tokens.find(t => String(t.id) === String(asaId) || String(t.assetId) === String(asaId));
+      if (token?.price) {
+        return res.json({ price: token.price, priceNative: token.priceInVoi || null, source: 'nomadex' });
+      }
+      return res.json({ price: null, source: 'unavailable' });
+    }
+
+    // Algorand: use Vestige (existing logic)
     const [tokenResp, algoUsd] = await Promise.all([
       axios.get(`${VESTIGE_BASE}/assets/price?asset_ids=${asaId}`, {
         timeout: REQUEST_TIMEOUT,
@@ -331,13 +442,13 @@ const getTokenPrice = async (req, res) => {
     ]);
     const tokenData = tokenResp.data[0];
     if (!tokenData?.price) {
-      return res.status(502).json({ error: 'Price not available' });
+      return res.json({ price: null, source: 'unavailable' });
     }
     const priceAlgo = tokenData.price;
     const priceUsd = priceAlgo * algoUsd;
-    res.json({ price: priceUsd, priceAlgo });
+    res.json({ price: priceUsd, priceAlgo, source: 'vestige' });
   } catch (err) {
-    res.status(502).json({ error: 'Price not available' });
+    res.json({ price: null, source: 'unavailable' });
   }
 };
 
@@ -358,7 +469,7 @@ async function resolveCreatorFromAsa(asaId) {
   if (cached && Date.now() < cached.expires) {
     return cached.creator;
   }
-  const resp = await axios.get(`${INDEXER_BASE}/assets/${asaId}`, { timeout: REQUEST_TIMEOUT });
+  const resp = await axios.get(`${_getIndexerBaseV2(req?.chainId)}/assets/${asaId}`, { timeout: REQUEST_TIMEOUT });
   const creator = resp.data?.asset?.params?.creator;
   if (!creator) throw new Error(`No creator found for ASA ${asaId}`);
   asaCreatorCache.set(asaId, { creator, expires: Date.now() + ASA_CREATOR_CACHE_TTL });
@@ -377,7 +488,7 @@ const lookupNftCollection = async (req, res) => {
     }
 
     // Fetch the asset to get creator
-    const assetResp = await axios.get(`${INDEXER_BASE}/assets/${asaId}`, { timeout: REQUEST_TIMEOUT });
+    const assetResp = await axios.get(`${_getIndexerBaseV2(req?.chainId)}/assets/${asaId}`, { timeout: REQUEST_TIMEOUT });
     const asset = assetResp.data?.asset;
     if (!asset) {
       return res.status(404).json({ success: false, message: 'Asset not found' });
@@ -392,7 +503,7 @@ const lookupNftCollection = async (req, res) => {
     asaCreatorCache.set(asaId, { creator, expires: Date.now() + ASA_CREATOR_CACHE_TTL });
 
     // Fetch sample assets by this creator
-    const creatorResp = await axios.get(`${INDEXER_BASE}/assets`, {
+    const creatorResp = await axios.get(`${_getIndexerBaseV2(req?.chainId)}/assets`, {
       params: { creator, limit: 10 },
       timeout: REQUEST_TIMEOUT,
     });
@@ -463,7 +574,7 @@ const verifyNftOwnership = async (req, res) => {
       const MAX_FETCHES = 5; // Limit pagination to prevent runaway requests
 
       do {
-        const url = `${INDEXER_BASE}/assets?creator=${creator}&limit=500${nextToken ? `&next=${nextToken}` : ''}`;
+        const url = `${_getIndexerBaseV2(req?.chainId)}/assets?creator=${creator}&limit=500${nextToken ? `&next=${nextToken}` : ''}`;
         const resp = await axios.get(url, { timeout: REQUEST_TIMEOUT });
         const assets = resp.data?.assets || [];
         for (const asset of assets) {
@@ -480,7 +591,7 @@ const verifyNftOwnership = async (req, res) => {
     // 2. Get wallet's ASA holdings
     let walletAssets;
     try {
-      const walletResp = await axios.get(`${INDEXER_BASE}/accounts/${wallet}/assets`, {
+      const walletResp = await axios.get(`${_getIndexerBaseV2(req?.chainId)}/accounts/${wallet}/assets`, {
         params: { limit: 1000 },
         timeout: REQUEST_TIMEOUT,
       });

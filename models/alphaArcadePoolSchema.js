@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const alphaArcadePoolSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   creatorId:            { type: String, default: 'system' },
   marketAppId:          { type: Number, required: true, unique: true },
   matcherAppId:         { type: Number, default: 3078581851 },
@@ -28,6 +34,7 @@ const alphaArcadePoolSchema = new mongoose.Schema({
   isActive:             { type: Boolean, default: true },
   isResolved:           { type: Boolean, default: false },
   resolutionOutcome:    { type: String, enum: ['yes', 'no', null], default: null },
+  lastOnChainSync:      { type: Date, default: null },
   createdAt:            { type: Date, default: Date.now },
 });
 

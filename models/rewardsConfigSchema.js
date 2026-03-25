@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const rewardsConfigSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   isEnabled: { type: Boolean, default: true },
   rewardSchedule: {
     type: [Number],

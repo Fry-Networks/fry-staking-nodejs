@@ -95,10 +95,10 @@ const tokenSchema = Joi.object({
 // Claim reward schema
 const claimRewardSchema = Joi.object({
   walletId: Joi.string().required(),
-  poolId: Joi.string().required(),
-  rewardClaimed: Joi.number().required(),
-  stakedAmount: Joi.number().required(),
-  stakedTime: Joi.number().required(),
+  poolId: Joi.alternatives().try(Joi.string(), Joi.number()).required(),
+  rewardClaimed: Joi.number().min(0).required(),
+  stakedAmount: Joi.number().min(0).required(),
+  stakedTime: Joi.number().min(0).required(),
   feeTxId: Joi.string().allow('').optional(),
   feeAssetId: Joi.number().optional(),
 });
@@ -106,9 +106,9 @@ const claimRewardSchema = Joi.object({
 // Claim farm reward schema
 const claimFarmRewardSchema = Joi.object({
   walletId: Joi.string().required(),
-  poolId: Joi.string().required(),
-  rewardClaimed: Joi.number().required(),
-  stakedAmount: Joi.number().required(),
+  poolId: Joi.alternatives().try(Joi.string(), Joi.number()).required(),
+  rewardClaimed: Joi.number().min(0).required(),
+  stakedAmount: Joi.number().min(0).required(),
   stakeStartTime: Joi.number().required(),
   claimTime: Joi.number().required(),
   feeTxId: Joi.string().allow('').optional(),
@@ -117,9 +117,9 @@ const claimFarmRewardSchema = Joi.object({
 
 // Withdraw schema
 const withdrawSchema = Joi.object({
-  tokens: Joi.number().required(),
+  tokens: Joi.number().min(0).required(),
   wallet: Joi.string().required(),
-  poolId: Joi.string().required(),
+  poolId: Joi.alternatives().try(Joi.string(), Joi.number()).required(),
   appId: Joi.number().required(),
   feeTxId: Joi.string().allow('').optional(),
   feeAssetId: Joi.number().optional(),
@@ -129,7 +129,7 @@ const withdrawSchema = Joi.object({
 const farmingWithdrawSchema = Joi.object({
   amount: Joi.number().required(),
   userWallet: Joi.string().required(),
-  poolId: Joi.string().required(),
+  poolId: Joi.alternatives().try(Joi.string(), Joi.number()).required(),
   farmingTokenId: Joi.string().required(),
   feeTxId: Joi.string().allow('').optional(),
   feeAssetId: Joi.number().optional(),
@@ -162,10 +162,12 @@ const swapHistorySchema = Joi.object({
 // Staker data schema
 const stakerDataSchema = Joi.object({
   walletId: Joi.string().required(),
-  stakedAmount: Joi.number().required(),
-  stakeTime: Joi.number().required(),
-  poolId: Joi.string().required(),
-  rewardClaimed: Joi.number().default(0),
+  stakedAmount: Joi.number().min(0).required(),
+  stakeTime: Joi.number().min(0).required(),
+  poolId: Joi.alternatives().try(Joi.string(), Joi.number()).required(),
+  rewardClaimed: Joi.number().min(0).default(0),
+  feeTxId: Joi.string().allow('').optional(),
+  feeAssetId: Joi.number().optional(),
 });
 
 // Daily reward claim schema

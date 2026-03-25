@@ -2,6 +2,12 @@ const mongoose = require('mongoose');
 
 const feeConfigSchema = new mongoose.Schema(
   {
+    chainId: {
+      type: String,
+      default: 'algorand-mainnet',
+      enum: ['algorand-mainnet', 'voi-mainnet'],
+      index: true,
+    },
     // Staking fees
     stakingDepositFeePercent: { type: Number, default: 0.5 },
     stakingWithdrawFeePercent: { type: Number, default: 0.25 },

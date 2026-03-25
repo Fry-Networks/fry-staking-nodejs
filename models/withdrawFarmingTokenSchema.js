@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const withdrawFarmingTokenSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   amount: {
     type: Number,
     required: true, // The amount of farming tokens being withdrawn

@@ -1,6 +1,6 @@
 const express = require("express");
 const { validate, gasFeeSchema } = require('../middleware/validate');
-const { requireAuth } = require('../middleware/auth');
+const { chainAwareAuth } = require('../middleware/auth');
 const {
   addGasFee,
   getAllGasFees,
@@ -11,7 +11,7 @@ const {
 
 const router = express.Router();
 
-router.post("/add", requireAuth, validate(gasFeeSchema), addGasFee);
+router.post("/add", chainAwareAuth, validate(gasFeeSchema), addGasFee);
 router.get('/all', getAllGasFees);
 router.get('/user/:userId', getGasFeesByUserId);
 router.get('/weekly', getWeeklyGasFees);

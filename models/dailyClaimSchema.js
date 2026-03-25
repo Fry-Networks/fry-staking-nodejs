@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const dailyClaimSchema = new mongoose.Schema({
+  chainId: {
+    type: String,
+    default: 'algorand-mainnet',
+    enum: ['algorand-mainnet', 'voi-mainnet'],
+    index: true,
+  },
   walletAddress: { type: String, required: true },
   claimDate: { type: Date, required: true },
   streakDay: { type: Number, required: true },

@@ -104,4 +104,13 @@ const requireRewardsAdmin = async (req, res, next) => {
   return res.status(403).json({ success: false, message: 'Rewards admin access required' });
 };
 
-module.exports = { requireAuth, requireAdmin, requireRewardsAdmin, checkIsAdmin };
+/**
+ * chainAwareAuth — For Algorand: requires JWT. For Voi: passes through
+ * (payment transaction serves as authentication on Voi).
+ */
+const chainAwareAuth = (req, res, next) => {
+  // All chains use JWT auth — Voi and Algorand both go through nonce/verify flow
+  return requireAuth(req, res, next);
+};
+
+module.exports = { requireAuth, requireAdmin, requireRewardsAdmin, checkIsAdmin, chainAwareAuth };

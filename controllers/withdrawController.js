@@ -10,6 +10,11 @@ const addWithdrawLog = async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
+    // Verify wallet matches authenticated user
+    if (wallet !== req.user.wallet) {
+      return res.status(403).json({ success: false, message: "Wallet does not match authenticated user" });
+    }
+
     const newWithdraw = new Withdraw({
       tokens,
       wallet,
