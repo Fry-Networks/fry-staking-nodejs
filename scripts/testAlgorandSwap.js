@@ -2,31 +2,21 @@
 /**
  * Manual test for Algorand swap service (aVOI → ALGO → FRY).
  *
- * Checks E2F2LT aVOI balance and swaps ALL available aVOI to FRY
- * via the 2-hop route: aVOI → ALGO (Folks Router) → FRY (Vestige).
+ * Uses checkAndSwapAvoiToFry() which reads the swap treasury's aVOI balance
+ * and swaps ALL available aVOI to FRY if above threshold, then forwards FRY to E2F2LT.
  *
  * DO NOT run unattended — this sends REAL funds.
  *
  * Usage:
- *   node scripts/testAlgorandSwap.js          # swap all aVOI
+ *   node scripts/testAlgorandSwap.js          # check balance & swap if above threshold
  *   node scripts/testAlgorandSwap.js quote     # quote only, no execution
  */
 
 require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
 const mongoose = require("mongoose");
-const axios = require("axios");
-const { swapAvoiToFry, getSwapQuote, MIN_SWAP_THRESHOLD, AVOI_ASA_ID } = require("../services/algorandSwapService");
-
-const ADMIN_WALLET = 'E2F2LT2INE75DBOYHQXTCTOP2PAP5MHAXQRXTTCCXFKHQTVG36DJONBQZE';
-
-async function getAvoiBalance() {
-  const { data } = await axios.get(
-    `https://mainnet-api.algonode.cloud/v2/accounts/${ADMIN_WALLET}`,
-    { timeout: 10000 },
-  );
-  const avoiAsset = (data.assets || []).find((a) => a['asset-id'] === AVOI_ASA_ID);
-  return avoiAsset ? avoiAsset.amount : 0;
-}
+const { checkAndSwapAvoiToFry, getSwapQuote, MIN_SWAP_THRESHOLD, AVOI_ASA_ID } = require("../services/algorandSwapService");
+const { getAlgodClientForChain } = require("../services/algodService");
+const { getTreasury } = require("../services/stakingClaimService");
 
 async function main() {
   const quoteOnly = process.argv[2] === 'quote';
@@ -40,40 +30,35 @@ async function main() {
   await mongoose.connect(uri);
   console.log("Connected to MongoDB\n");
 
-  // Check aVOI balance
-  const balance = await getAvoiBalance();
-  console.log(`E2F2LT aVOI balance: ${balance / 1e6} aVOI (${balance} micro)`);
-
-  if (balance < MIN_SWAP_THRESHOLD) {
-    console.log(`\nBalance below minimum threshold (${MIN_SWAP_THRESHOLD / 1e6} aVOI). Nothing to swap.`);
-    await mongoose.disconnect();
-    process.exit(0);
-  }
-
-  // Get quote first
-  console.log(`\nFetching quote for ${balance / 1e6} aVOI → FRY...`);
-  const quote = await getSwapQuote(balance);
-  console.log("Quote:", JSON.stringify(quote, null, 2));
-
-  if (!quote.success) {
-    console.error("\nQuote failed:", quote.error);
-    await mongoose.disconnect();
-    process.exit(1);
-  }
+  // Resolve swap treasury address
+  const { addr } = getTreasury('algorand-mainnet');
+  const swapWallet = addr.toString();
 
   if (quoteOnly) {
+    // Quote mode: fetch balance via algod, then get quote
+    const client = getAlgodClientForChain('algorand-mainnet');
+    const assetInfo = await client.accountAssetInformation(swapWallet, AVOI_ASA_ID).do();
+    const balance = Number(assetInfo.assetHolding?.amount || 0);
+
+    console.log(`Swap treasury (${swapWallet}) aVOI balance: ${balance / 1e6} aVOI (${balance} micro)`);
+    console.log(`Swap threshold: ${MIN_SWAP_THRESHOLD / 1e6} aVOI (${MIN_SWAP_THRESHOLD} micro)`);
+
+    if (balance < MIN_SWAP_THRESHOLD) {
+      console.log(`\nBalance below threshold — would skip. Fetching quote anyway...`);
+    }
+
+    console.log(`\nFetching quote for ${balance / 1e6} aVOI → FRY...`);
+    const quote = await getSwapQuote(balance);
+    console.log("Quote:", JSON.stringify(quote, null, 2));
     console.log("\n(Quote only mode — not executing swap)");
     await mongoose.disconnect();
-    process.exit(0);
+    process.exit(quote.success ? 0 : 1);
   }
 
-  // Execute swap
-  console.log(`\nExecuting swap: ${balance / 1e6} aVOI → FRY...`);
-  console.log("---");
-
-  const result = await swapAvoiToFry(balance, 'manual-test');
-
-  console.log("\nResult:", JSON.stringify(result, null, 2));
+  // Execute mode: checkAndSwap handles balance check + swap + FRY forwarding
+  console.log("Running checkAndSwapAvoiToFry...\n");
+  const result = await checkAndSwapAvoiToFry('manual-test');
+  console.log("Result:", JSON.stringify(result, null, 2));
 
   await mongoose.disconnect();
   process.exit(result.success ? 0 : 1);

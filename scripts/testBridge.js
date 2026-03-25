@@ -2,7 +2,7 @@
 /**
  * Manual test for Aramid bridge service (VOI → aVOI on Algorand).
  *
- * Bridges 1.5 VOI from the Voi treasury to E2F2LT... on Algorand.
+ * Bridges 1.5 VOI from the Voi treasury to the swap treasury (REWARD_MNEMONIC addr).
  * DO NOT run unattended — this sends REAL funds.
  *
  * Usage:
@@ -12,8 +12,8 @@
 require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
 const mongoose = require("mongoose");
 const { bridgeVoiToAlgorand } = require("../services/aramidBridgeService");
+const { getTreasury } = require("../services/stakingClaimService");
 
-const DESTINATION = 'E2F2LT2INE75DBOYHQXTCTOP2PAP5MHAXQRXTTCCXFKHQTVG36DJONBQZE';
 const AMOUNT_MICRO = 1_500_000; // 1.5 VOI
 
 async function main() {
@@ -26,10 +26,14 @@ async function main() {
   await mongoose.connect(uri);
   console.log("Connected to MongoDB\n");
 
-  console.log(`Bridging ${AMOUNT_MICRO / 1e6} VOI → aVOI to ${DESTINATION}`);
+  // Resolve swap treasury address (default bridge destination)
+  const { addr } = getTreasury('algorand-mainnet');
+  const destination = addr.toString();
+
+  console.log(`Bridging ${AMOUNT_MICRO / 1e6} VOI → aVOI to ${destination}`);
   console.log("---");
 
-  const result = await bridgeVoiToAlgorand(AMOUNT_MICRO, DESTINATION, 'manual-test');
+  const result = await bridgeVoiToAlgorand(AMOUNT_MICRO, destination, 'manual-test');
 
   console.log("\nResult:", JSON.stringify(result, null, 2));
 

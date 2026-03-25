@@ -34,6 +34,7 @@ const alphaArcadePoolSchema = new mongoose.Schema({
   isActive:             { type: Boolean, default: true },
   isResolved:           { type: Boolean, default: false },
   resolutionOutcome:    { type: String, enum: ['yes', 'no', null], default: null },
+  lastOnChainSync:      { type: Date, default: null },
   createdAt:            { type: Date, default: Date.now },
 });
 

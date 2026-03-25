@@ -50,6 +50,31 @@ async function getAlgoUsdPrice() {
   return 0;
 }
 
+async function getVoiUsdPrice() {
+  const cached = getCached('voiUsd');
+  if (cached !== null) return cached;
+
+  try {
+    const res = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+      params: { ids: 'voi-network', vs_currencies: 'usd' },
+      timeout: 8000,
+    });
+    const price = parseFloat(res.data?.['voi-network']?.usd ?? '0');
+    if (price > 0) { setCache('voiUsd', price); return price; }
+  } catch { /* fallback */ }
+
+  try {
+    const res = await axios.get('https://api.coinpaprika.com/v1/tickers/voi-voi-network', {
+      timeout: 8000,
+    });
+    const price = parseFloat(res.data?.quotes?.USD?.price ?? '0');
+    if (price > 0) { setCache('voiUsd', price); return price; }
+  } catch { /* fallback */ }
+
+  logger.error('getVoiUsdPrice: all endpoints failed');
+  return 0;
+}
+
 async function fetchTinymanPool(a, b) {
   const urls = [
     `https://mainnet.analytics.tinyman.org/api/v1/pool/${a}/${b}/`,
@@ -243,4 +268,5 @@ module.exports = {
   getAlgoUsdPrice,
   getAsaUsdPrice,
   getFryUsdPrice,
+  getVoiUsdPrice,
 };

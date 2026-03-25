@@ -1,8 +1,9 @@
 const algosdk = require('algosdk');
 const axios = require('axios');
 const logger = require('../config/logger');
-const { withFallbackForChain } = require('./algodService');
+const { withFallbackForChain, getAlgodClientForChain } = require('./algodService');
 const { getTreasury } = require('./stakingClaimService');
+const { getChainConfig } = require('../config/chains');
 const SwapLog = require('../models/swapLogSchema');
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -15,7 +16,7 @@ const AVOI_ASA_ID = 2320775407;
 const FRY_ASA_ID = 2485314946;
 const ALGO_ASA_ID = 0;
 
-const MIN_SWAP_THRESHOLD = 100000;   // 0.1 aVOI in microunits
+const MIN_SWAP_THRESHOLD = parseInt(process.env.AVOI_SWAP_THRESHOLD || '500000000'); // 500 aVOI default
 const MAX_SLIPPAGE_BPS = 300;        // 3% for Folks Router
 const VESTIGE_SLIPPAGE = 0.03;       // 3% for Vestige
 const MAX_PRICE_IMPACT = 0.10;       // 10% — abort if exceeded
@@ -250,6 +251,86 @@ async function swapAvoiToFry(amountMicroAvoi, triggerSource = 'manual') {
   }
 }
 
+// ── FRY Forwarding ──────────────────────────────────────────────────────────
+
+/**
+ * Send all FRY from the swap treasury (HXWYLL) to the admin wallet (E2F2LT).
+ * Called after a successful swap to consolidate FRY in the public wallet.
+ */
+async function sendFryToAdmin() {
+  const { addr: senderAddr, sk: senderSk } = getTreasury(CHAIN_ID);
+  const { feeRecipient } = getChainConfig(CHAIN_ID);
+  const client = getAlgodClientForChain(CHAIN_ID);
+
+  const assetInfo = await client.accountAssetInformation(senderAddr.toString(), FRY_ASA_ID).do();
+  const fryBalance = Number(assetInfo.assetHolding?.amount || 0);
+
+  if (fryBalance === 0) {
+    return { success: true, action: 'no-fry', amount: 0 };
+  }
+
+  const txId = await withFallbackForChain(CHAIN_ID, async (algod) => {
+    const params = await algod.getTransactionParams().do();
+    const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+      sender: senderAddr,
+      receiver: feeRecipient,
+      amount: fryBalance,
+      assetIndex: FRY_ASA_ID,
+      suggestedParams: params,
+    });
+    const signedTxn = txn.signTxn(senderSk);
+    const { txid } = await algod.sendRawTransaction(signedTxn).do();
+    await algosdk.waitForConfirmation(algod, txid, 4);
+    return txid;
+  });
+
+  logger.info(`algorandSwap: sendFryToAdmin — sent ${fryBalance / 1e6} FRY to ${feeRecipient}, txId=${txId}`);
+  return { success: true, txId, amount: fryBalance };
+}
+
+// ── Balance Check + Swap ─────────────────────────────────────────────────────
+
+/**
+ * Check treasury aVOI balance and swap to FRY if above threshold.
+ * Called by orchestrator after every bridge — accumulates until worthwhile.
+ * After swap, forwards FRY to the admin wallet (E2F2LT).
+ *
+ * @param {string} [triggerSource='auto'] - Source that triggered the check
+ * @returns {Promise<{ success: boolean, action?: string, balance?: number, threshold?: number, message?: string, ... }>}
+ */
+async function checkAndSwapAvoiToFry(triggerSource = 'auto') {
+  try {
+    const { addr } = getTreasury(CHAIN_ID);
+    const client = getAlgodClientForChain(CHAIN_ID);
+    const assetInfo = await client.accountAssetInformation(addr.toString(), AVOI_ASA_ID).do();
+    const balance = Number(assetInfo.assetHolding?.amount || 0);
+
+    logger.info(`algorandSwap: checkAndSwap — aVOI balance=${balance / 1e6} threshold=${MIN_SWAP_THRESHOLD / 1e6} trigger=${triggerSource}`);
+
+    if (balance < MIN_SWAP_THRESHOLD) {
+      return {
+        success: true,
+        action: 'skipped',
+        balance,
+        threshold: MIN_SWAP_THRESHOLD,
+        message: 'aVOI balance below swap threshold, accumulating',
+      };
+    }
+
+    const swapResult = await swapAvoiToFry(balance, triggerSource);
+    if (swapResult.success) {
+      const fryForward = await sendFryToAdmin();
+      swapResult.fryForwardTxId = fryForward.txId;
+      swapResult.fryForwardAmount = fryForward.amount;
+    }
+    return swapResult;
+  } catch (err) {
+    const msg = `checkAndSwap failed: ${err.message}`;
+    logger.error(`algorandSwap: ${msg}`, { stack: err.stack });
+    return { success: false, error: msg };
+  }
+}
+
 // ── Quote Helper ─────────────────────────────────────────────────────────────
 
 /**
@@ -277,6 +358,8 @@ async function getSwapQuote(amountMicroAvoi) {
 
 module.exports = {
   swapAvoiToFry,
+  checkAndSwapAvoiToFry,
+  sendFryToAdmin,
   getSwapQuote,
   MIN_SWAP_THRESHOLD,
   AVOI_ASA_ID,

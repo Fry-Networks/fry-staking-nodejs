@@ -233,24 +233,62 @@ const claimReward = async (req, res) => {
     // Convert to microFRY (6 decimals)
     const microAmount = netReward * 1e6;
 
-    // Sign and submit ASA transfer (with node fallback)
-    const { txId } = await withFallback(async (client) => {
-      const params = await client.getTransactionParams().do();
-      const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-        sender: treasuryAddr,
-        receiver: wallet,
-        amount: microAmount,
-        assetIndex: config.fryAsaId,
-        suggestedParams: params,
+    // Record claim FIRST — unique index prevents concurrent double-claims
+    const today = new Date();
+    const claimDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+
+    let claimRecord;
+    try {
+      claimRecord = await DailyClaim.create({
+        walletAddress: wallet,
+        claimDate,
+        streakDay: streakDay + 1,
+        baseReward,
+        trustMultiplier,
+        actualReward,
+        txId: 'pending',
+        ipAddress: ip,
+        fingerprintHash,
+        trustScore: eligibility.trustScore,
+        trustTier: eligibility.trustTier,
+        onChainScore: eligibility.onChainScore || 0,
       });
+    } catch (dupErr) {
+      if (dupErr.code === 11000) {
+        return res.status(409).json({ success: false, message: 'Already claimed today' });
+      }
+      throw dupErr;
+    }
 
-      const signedTxn = txn.signTxn(signingKey);
-      const { txid } = await client.sendRawTransaction(signedTxn).do();
+    // Sign and submit ASA transfer (with node fallback)
+    let txId;
+    try {
+      const result = await withFallback(async (client) => {
+        const params = await client.getTransactionParams().do();
+        const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+          sender: treasuryAddr,
+          receiver: wallet,
+          amount: microAmount,
+          assetIndex: config.fryAsaId,
+          suggestedParams: params,
+        });
 
-      // Wait for confirmation (up to 4 rounds)
-      await algosdk.waitForConfirmation(client, txid, 4);
-      return { txId: txid };
-    });
+        const signedTxn = txn.signTxn(signingKey);
+        const { txid } = await client.sendRawTransaction(signedTxn).do();
+
+        // Wait for confirmation (up to 4 rounds)
+        await algosdk.waitForConfirmation(client, txid, 4);
+        return { txId: txid };
+      });
+      txId = result.txId;
+    } catch (sendErr) {
+      // On-chain send failed — delete the claim record so user can retry
+      await DailyClaim.deleteOne({ _id: claimRecord._id });
+      throw sendErr;
+    }
+
+    // Update record with real txId
+    await DailyClaim.updateOne({ _id: claimRecord._id }, { $set: { txId } });
 
     // Log daily claim fee (fire-and-forget)
     if (feeAmount > 0) {
@@ -264,32 +302,6 @@ const claimReward = async (req, res) => {
         baseAmount: actualReward,
         txId,
       }).catch(err => logger.error('Failed to log daily claim fee:', err.message));
-    }
-
-    // Record claim in DB (unique index catches race conditions)
-    const today = new Date();
-    const claimDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-
-    try {
-      await DailyClaim.create({
-        walletAddress: wallet,
-        claimDate,
-        streakDay: streakDay + 1,
-        baseReward,
-        trustMultiplier,
-        actualReward,
-        txId,
-        ipAddress: ip,
-        fingerprintHash,
-        trustScore: eligibility.trustScore,
-        trustTier: eligibility.trustTier,
-        onChainScore: eligibility.onChainScore || 0,
-      });
-    } catch (dupErr) {
-      if (dupErr.code === 11000) {
-        return res.status(409).json({ success: false, message: 'Already claimed today' });
-      }
-      throw dupErr;
     }
 
     // Update streak

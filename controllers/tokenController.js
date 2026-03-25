@@ -7,7 +7,8 @@ function escapeRegex(str) {
 
 const getAllTokens = async (req, res) => {
   try {
-    const tokens = await Token.find();
+    const filter = req.chainId ? { chainId: req.chainId } : {};
+    const tokens = await Token.find(filter);
     if (tokens.length === 0) {
       return res.status(404).json({
         success: false,
@@ -147,7 +148,9 @@ const searchTokenByName = async (req, res) => {
     }
 
     // Case-insensitive search using regex
+    const filter = req.chainId ? { chainId: req.chainId } : {};
     const tokens = await Token.find({
+      ...filter,
       tokenName: { $regex: escapeRegex(tokenName), $options: 'i' }
     });
 

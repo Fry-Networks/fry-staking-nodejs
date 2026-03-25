@@ -98,6 +98,10 @@ const stakingSchema = new mongoose.Schema({
     type: Number,
     default: 1,
   },
+  lastOnChainSync: {
+    type: Date,
+    default: null,
+  },
 });
 
 

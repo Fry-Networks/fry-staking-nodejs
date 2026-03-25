@@ -114,8 +114,11 @@ function getIndexerClient(chainId = DEFAULT_CHAIN_ID) {
  * Returns the server URL of the first healthy indexer endpoint.
  */
 function getIndexerUrl(chainId = DEFAULT_CHAIN_ID) {
-  const config = getChainConfig(chainId);
-  return config.indexerEndpoints[0].server;
+  const nodes = getIndexerNodes(chainId);
+  for (const node of nodes) {
+    if (!node.circuitOpen) return node.server;
+  }
+  return nodes[0].server;
 }
 
 module.exports = {

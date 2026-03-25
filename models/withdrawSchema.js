@@ -29,5 +29,8 @@ const withdrawSchema = new mongoose.Schema({
   }
 });
 
+withdrawSchema.index({ wallet: 1, poolId: 1, timestamp: 1 });
+withdrawSchema.index({ appId: 1, wallet: 1 });
+
 const Withdraw = mongoose.model("Withdraw", withdrawSchema, "withdrawalTokens");
 module.exports = Withdraw;

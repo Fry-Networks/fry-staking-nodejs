@@ -40,7 +40,7 @@ async function claimReward(req, res) {
     }
 
     // Verify wallet matches authenticated user
-    if (req.wallet && req.wallet !== wallet) {
+    if (req.user?.wallet && req.user.wallet !== wallet) {
       return res.status(403).json({ success: false, message: 'Wallet does not match authenticated user' });
     }
 
@@ -71,7 +71,7 @@ async function claimAndWithdraw(req, res) {
       return res.status(400).json({ success: false, message: 'wallet and appId required' });
     }
 
-    if (req.wallet && req.wallet !== wallet) {
+    if (req.user?.wallet && req.user.wallet !== wallet) {
       return res.status(403).json({ success: false, message: 'Wallet does not match authenticated user' });
     }
 

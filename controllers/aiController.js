@@ -1,8 +1,8 @@
 const logger = require("../config/logger");
 const AiInteraction = require("../models/aiInteractionSchema");
-const { verifyFryPayment } = require("../services/paymentVerificationService");
+const { verifyFryPaymentWithRetry } = require("../services/paymentVerificationService");
 const claudeService = require("../services/claudeService");
-const { getFryUsdPrice, getAsaUsdPrice } = require("../services/priceService");
+const { getFryUsdPrice, getAsaUsdPrice, getVoiUsdPrice } = require("../services/priceService");
 const Staking = require("../models/stakingSchema");
 const StakingToken = require("../models/stakingTokenSchema");
 const Farming = require("../models/farmingSchema");
@@ -24,6 +24,24 @@ async function calculateFryCost(type) {
   const minFry = MIN_FRY[type];
   if (!fryPrice || fryPrice <= 0) return minFry;
   return Math.max(minFry, Math.ceil(usdCost / fryPrice));
+}
+
+/** Calculate expected payment amount and asset ID based on chain */
+async function calculateExpectedPayment(type, chainId) {
+  const costFry = await calculateFryCost(type);
+
+  if (chainId === 'voi-mainnet') {
+    const fryPrice = await getFryUsdPrice().catch(() => 0);
+    const voiPrice = await getVoiUsdPrice().catch(() => 0);
+    if (!fryPrice || fryPrice <= 0 || !voiPrice || voiPrice <= 0) {
+      throw new Error('Could not determine payment amount (price feed unavailable)');
+    }
+    const costUsd = costFry * fryPrice;
+    const voiMicroAmount = Math.ceil((costUsd / voiPrice) * 1_000_000);
+    return { costFry, expectedMicro: voiMicroAmount, assetId: 0 };
+  }
+
+  return { costFry, expectedMicro: costFry * 1_000_000, assetId: null };
 }
 
 const getPrices = async (req, res) => {
@@ -60,11 +78,10 @@ const analyzePool = async (req, res) => {
 
   try {
     // Calculate dynamic cost
-    const costFry = await calculateFryCost("pool");
-    const costMicro = costFry * 1_000_000;
+    const { costFry, expectedMicro, assetId } = await calculateExpectedPayment("pool", req.chainId);
 
     // Verify payment
-    const payment = await verifyFryPayment(txId, costMicro, wallet);
+    const payment = await verifyFryPaymentWithRetry(txId, expectedMicro, wallet, req.chainId, assetId);
     if (!payment.verified) {
       return res.status(402).json({ success: false, message: payment.error });
     }
@@ -75,7 +92,7 @@ const analyzePool = async (req, res) => {
       walletAddress: wallet,
       interactionType: "pool_analysis",
       paymentTxId: txId,
-      paymentAmount: costMicro,
+      paymentAmount: expectedMicro,
       fryPriceAtTime: fryPrice,
       poolId,
       status: "pending",
@@ -160,11 +177,10 @@ const analyzePortfolio = async (req, res) => {
 
   try {
     // Calculate dynamic cost
-    const costFry = await calculateFryCost("portfolio");
-    const costMicro = costFry * 1_000_000;
+    const { costFry, expectedMicro, assetId } = await calculateExpectedPayment("portfolio", req.chainId);
 
     // Verify payment
-    const payment = await verifyFryPayment(txId, costMicro, wallet);
+    const payment = await verifyFryPaymentWithRetry(txId, expectedMicro, wallet, req.chainId, assetId);
     if (!payment.verified) {
       return res.status(402).json({ success: false, message: payment.error });
     }
@@ -175,7 +191,7 @@ const analyzePortfolio = async (req, res) => {
       walletAddress: wallet,
       interactionType: "portfolio_analysis",
       paymentTxId: txId,
-      paymentAmount: costMicro,
+      paymentAmount: expectedMicro,
       fryPriceAtTime: fryPrice,
       status: "pending",
     });
@@ -253,11 +269,10 @@ const analyzeSwap = async (req, res) => {
 
   try {
     // Calculate dynamic cost
-    const costFry = await calculateFryCost("swap");
-    const costMicro = costFry * 1_000_000;
+    const { costFry, expectedMicro, assetId } = await calculateExpectedPayment("swap", req.chainId);
 
     // Verify payment
-    const payment = await verifyFryPayment(txId, costMicro, wallet);
+    const payment = await verifyFryPaymentWithRetry(txId, expectedMicro, wallet, req.chainId, assetId);
     if (!payment.verified) {
       return res.status(402).json({ success: false, message: payment.error });
     }
@@ -268,7 +283,7 @@ const analyzeSwap = async (req, res) => {
       walletAddress: wallet,
       interactionType: "swap_analysis",
       paymentTxId: txId,
-      paymentAmount: costMicro,
+      paymentAmount: expectedMicro,
       fryPriceAtTime: fryPrice,
       status: "pending",
     });

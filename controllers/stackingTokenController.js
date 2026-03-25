@@ -9,7 +9,8 @@ const StakerData = require("../models/stakerDataSchema");
 // Create or update staking token (upsert by wallet + poolId)
 const addStakingToken = async (req, res) => {
   try {
-    const { wallet, poolId, totalStaked } = req.body;
+    const { wallet, totalStaked } = req.body;
+    const poolId = req.body.poolId || req.body.appId?.toString();
 
     if (!wallet || !poolId) {
       return res.status(400).json({ success: false, message: 'wallet and poolId are required' });
@@ -18,8 +19,9 @@ const addStakingToken = async (req, res) => {
       return res.status(400).json({ success: false, message: 'totalStaked must be a positive number' });
     }
 
+    const chainId = req.chainId || 'algorand-mainnet';
     const savedToken = await StakingToken.findOneAndUpdate(
-      { wallet, poolId },
+      { wallet, poolId, chainId },
       {
         $inc: { totalStaked: totalStaked },
         $set: {
@@ -31,10 +33,30 @@ const addStakingToken = async (req, res) => {
           rewardToken: req.body.rewardToken,
           stakeTokens: req.body.stakeTokens,
           appId: req.body.appId,
+          chainId,
         },
       },
       { upsert: true, new: true }
     );
+
+    // Increment the pool's totalAmountStaked (standard units, not micro)
+    const onChainAppId = req.body.appId?.toString();
+    if (onChainAppId) {
+      try {
+        const isNewStaker = savedToken.totalStaked === totalStaked;
+        await staking.findOneAndUpdate(
+          { stakingContractId: onChainAppId },
+          {
+            $inc: {
+              totalAmountStaked: totalStaked / 1_000_000,
+              ...(isNewStaker ? { totalStakers: 1 } : {}),
+            },
+          }
+        );
+      } catch (poolErr) {
+        logger.warn('Failed to update pool totalAmountStaked:', poolErr.message);
+      }
+    }
 
     res.status(201).json({ success: true, data: savedToken });
   } catch (error) {
@@ -45,7 +67,8 @@ const addStakingToken = async (req, res) => {
 // Get all staking tokens
 const getAllStakingTokens = async (req, res) => {
   try {
-    const tokens = await StakingToken.find();
+    const chainId = req.chainId || 'algorand-mainnet';
+    const tokens = await StakingToken.find({ chainId });
     res.status(200).json({ success: true, data: tokens });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to fetch staking tokens', error: error.message });
@@ -111,15 +134,9 @@ const getPoolTokensAndWithdrawn = async (req, res) => {
 
   try {
     const records = await StakingToken.find({ appId: Number(poolId) });
-    if (!records.length) {
-      return res.status(404).json({
-        success: false,
-        message: "No staking records found for this user in the given pool"
-      });
-    }
 
     const totalStaked = records.reduce((sum, rec) => sum + (rec.totalStaked || 0), 0);
-    
+
     const withdrawalRecords = await withdrawToken.find({ appId: Number(poolId) });
     const totalWithdrawn = withdrawalRecords.reduce((sum, rec) => sum + (rec.tokens || 0), 0);
     const updatedAmount = totalStaked - totalWithdrawn;
@@ -149,15 +166,8 @@ const getStakingRecordsByAppId = async (req, res) => {
   }
 
   try {
-    // Fetch farming records where the appId matches
+    // Fetch staking pool records where the appId matches
     const records = await staking.find({ stakingContractId : appId }).sort({ createdAt: -1 });
-
-    if (!records.length) {
-      return res.status(404).json({
-        success: false,
-        message: "No staking records found for the given appId"
-      });
-    }
 
     res.status(200).json({
       success: true,
@@ -184,7 +194,8 @@ const getUserStakingStats = async (req, res) => {
 
   try {
     // 1. TVL: sum all pools' totalAmountStaked (already in standard units)
-    const allPools = await staking.find({});
+    const chainId = req.chainId || 'algorand-mainnet';
+    const allPools = await staking.find({ chainId });
     const totalTVL = allPools.reduce((sum, p) => sum + (p.totalAmountStaked || 0), 0);
 
     // 2. My Stakes: StakingToken (micro units) with StakerData fallback
@@ -241,14 +252,7 @@ const getStakingTokensById = async (req, res) => {
   try {
     const data = await StakingToken.find({ appId : Number(poolId) }).sort({ createdAt: -1 });
 
-    if (data.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No records found for the given pool ID"
-      });
-    }
-
-    return res.status(200).json({ success: true, data }); // ✅ return here
+    return res.status(200).json({ success: true, data });
   } catch (error) {
     return res.status(500).json({
       success: false,

@@ -24,6 +24,7 @@ const chains = {
     fryTokenId: 2485314946,
     usdcId: 31566704,
     feeRecipient: process.env.FEE_RECIPIENT || 'E2F2LT2INE75DBOYHQXTCTOP2PAP5MHAXQRXTTCCXFKHQTVG36DJONBQZE',
+    indexerRetry: { maxAttempts: 3, delayMs: 3000 },
     explorerBaseUrl: 'https://explorer.perawallet.app',
     features: {
       staking: true,
@@ -41,17 +42,20 @@ const chains = {
     family: 'avm',
     nativeAsset: { name: 'Voi', symbol: 'VOI', decimals: 6, id: 0 },
     algodEndpoints: [
+      { name: 'ATLAS00', server: 'http://100.69.195.100', port: 4191, token: process.env.ATLAS00_VOI_ALGOD_TOKEN || '' },
       { name: 'Nodely', server: 'https://mainnet-api.voi.nodely.dev', port: 443, token: '' },
     ],
     indexerEndpoints: [
       { name: 'Nodely', server: 'https://mainnet-idx.voi.nodely.dev', port: 443, token: '' },
+      { name: 'Nodely-IO', server: 'https://mainnet-idx.voi.nodely.io', port: 443, token: '' },
     ],
-    fryTokenId: null,
+    fryTokenId: 48968653,  // vFRY ASA on Voi
     usdcId: null,
-    feeRecipient: null,
+    feeRecipient: 'NQA76E235VCMZB4KZQSV6IU64IWF2GGCXK4Y3QA7N7ZMI7MVHUQVV5BUD4',
+    indexerRetry: { maxAttempts: 6, delayMs: 5000 },
     explorerBaseUrl: 'https://explorer.voi.network',
     features: {
-      staking: false,
+      staking: true,
       farming: false,
       nftStaking: false,
       deviceStaking: false,

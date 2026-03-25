@@ -20,19 +20,36 @@ async function fetchWithRetry(url, maxRetries = 3) {
 }
 
 /**
+ * Verify with retry — polls indexer up to maxAttempts times with delay between.
+ * Handles the 2-8 second indexer lag after on-chain confirmation.
+ */
+async function verifyFryPaymentWithRetry(txId, expectedAmount, senderWallet, chainId = 'algorand-mainnet', assetId = null, maxAttempts = 3, delayMs = 3000) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const result = await verifyFryPayment(txId, expectedAmount, senderWallet, chainId, assetId);
+    if (result.verified) return result;
+    if (result.error && result.error !== "Transaction not found") return result;
+    if (attempt < maxAttempts) {
+      logger.info(`paymentVerification: txId ${txId} not indexed yet, retry ${attempt}/${maxAttempts} in ${delayMs}ms`);
+      await sleep(delayMs);
+    }
+  }
+  return { verified: false, error: "Transaction not found after retries (indexer lag)" };
+}
+
+/**
  * Verify a FRY payment transaction on Algorand.
  * @param {string} txId - Transaction ID
  * @param {number} expectedAmount - Minimum FRY amount in micro-units
  * @param {string} senderWallet - Expected sender address
  * @returns {{ verified: boolean, error?: string }}
  */
-async function verifyFryPayment(txId, expectedAmount, senderWallet, chainId = 'algorand-mainnet') {
+async function verifyFryPayment(txId, expectedAmount, senderWallet, chainId = 'algorand-mainnet', assetId = null) {
   const chainConfig = getChainConfig(chainId);
-  const FRY_ASA_ID = chainConfig.fryTokenId;
+  const effectiveAssetId = assetId !== null ? assetId : chainConfig.fryTokenId;
   const ADMIN_WALLET = chainConfig.feeRecipient;
 
-  if (!FRY_ASA_ID) {
-    return { verified: false, error: `FRY token not available on ${chainConfig.displayName}` };
+  if (effectiveAssetId === null || effectiveAssetId === undefined) {
+    return { verified: false, error: `Payment not available on ${chainConfig.displayName}` };
   }
   // Check replay: has this txId already been used?
   const existing = await AiInteraction.findOne({ paymentTxId: txId }).lean();
@@ -65,24 +82,38 @@ async function verifyFryPayment(txId, expectedAmount, senderWallet, chainId = 'a
     return { verified: false, error: "Transaction not confirmed" };
   }
 
-  // Must be an asset transfer
-  const axfer = tx["asset-transfer-transaction"];
-  if (tx["tx-type"] !== "axfer" || !axfer) {
-    return { verified: false, error: "Not an asset transfer transaction" };
+  // Validate transaction type and extract receiver/amount
+  let receiver, amount;
+
+  if (effectiveAssetId === 0) {
+    // Native payment (VOI)
+    const pay = tx["payment-transaction"];
+    if (tx["tx-type"] !== "pay" || !pay) {
+      return { verified: false, error: "Expected native payment transaction" };
+    }
+    receiver = pay.receiver;
+    amount = pay.amount;
+  } else {
+    // ASA transfer (FRY)
+    const axfer = tx["asset-transfer-transaction"];
+    if (tx["tx-type"] !== "axfer" || !axfer) {
+      return { verified: false, error: "Not an asset transfer transaction" };
+    }
+    if (axfer["asset-id"] !== effectiveAssetId) {
+      return { verified: false, error: `Wrong asset: expected ${effectiveAssetId}, got ${axfer["asset-id"]}` };
+    }
+    receiver = axfer.receiver;
+    amount = axfer.amount;
   }
 
-  // Must be FRY token
-  if (axfer["asset-id"] !== FRY_ASA_ID) {
-    return { verified: false, error: "Wrong asset (expected FRY)" };
-  }
-
-  // Amount must be sufficient
-  if (axfer.amount < expectedAmount) {
-    return { verified: false, error: `Insufficient amount: ${axfer.amount} < ${expectedAmount}` };
+  // Amount must be sufficient (2% tolerance for price drift)
+  const minAcceptable = Math.floor(expectedAmount * 0.98);
+  if (amount < minAcceptable) {
+    return { verified: false, error: `Insufficient amount: ${amount} < ${minAcceptable} (expected ~${expectedAmount})` };
   }
 
   // Receiver must be admin wallet
-  if (axfer.receiver !== ADMIN_WALLET) {
+  if (receiver !== ADMIN_WALLET) {
     return { verified: false, error: "Wrong receiver" };
   }
 
@@ -94,4 +125,4 @@ async function verifyFryPayment(txId, expectedAmount, senderWallet, chainId = 'a
   return { verified: true };
 }
 
-module.exports = { verifyFryPayment };
+module.exports = { verifyFryPayment, verifyFryPaymentWithRetry };

@@ -1,5 +1,6 @@
 const logger = require("../config/logger");
 const Staking = require("../models/stakingSchema");
+const { checkIsAdmin } = require("../middleware/auth");
 
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -9,11 +10,11 @@ function escapeRegex(str) {
 const getAllStakingData = async(req, res) => {
     try {
         const { tokenName } = req.query;
+        const chainId = req.chainId || 'algorand-mainnet';
 
         const query = tokenName ?
-            { 'stakeToken.name': { $regex: escapeRegex(tokenName), $options: 'i' } } :
-            {};
-
+            { chainId, 'stakeToken.name': { $regex: escapeRegex(tokenName), $options: 'i' } } :
+            { chainId };
 
         const stakingData = await Staking.find(query);
 
@@ -41,8 +42,8 @@ const getStakingDataByCreatorId = async(req, res) => {
     const { creatorId } = req.params;
     const { tokenName } = req.query; // Get tokenName from query parameters
     try {
-        // Build the query to include creatorId and optionally tokenName
-        const query = { creatorId };
+        const chainId = req.chainId || 'algorand-mainnet';
+        const query = { creatorId, chainId };
 
         // If tokenName is provided, add filter for stakeToken.name
         if (tokenName) {
@@ -104,7 +105,8 @@ const getStakingDataByContractId = async(req, res) => {
     const { contractId } = req.params;
 
     try {
-        const stakingData = await Staking.find({ stakingContractId: contractId });
+        const chainId = req.chainId || 'algorand-mainnet';
+        const stakingData = await Staking.find({ stakingContractId: contractId, chainId });
 
         res.status(200).json({
             success: true,
@@ -137,12 +139,14 @@ const addStakingData = async(req, res) => {
         rewardTokenAmount,
         stakingContractId,
         lockPeriod,
+        contractVersion,
     } = req.body;
 
     try {
 
 
         const newStakingData = new Staking({
+            chainId: req.chainId || 'algorand-mainnet',
             creatorId,
             stakeToken,
             rewardToken,
@@ -152,8 +156,9 @@ const addStakingData = async(req, res) => {
             duration,
             aprRate,
             rewardTokenAmount,
-            stakingContractId,
+            stakingContractId: String(stakingContractId),
             lockPeriod,
+            contractVersion: contractVersion || 1,
         });
 
         const savedStakingData = await newStakingData.save();
@@ -189,6 +194,15 @@ const updateStakingData = async(req, res) => {
             return res.status(404).json({
                 success: false,
                 message: `Staking data with ID ${id} not found.`,
+            });
+        }
+
+        // Verify ownership — only pool creator or admin can update
+        const isAdmin = await checkIsAdmin(req.user.wallet);
+        if (currentData.creatorId !== req.user.wallet && !isAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to update this pool',
             });
         }
 
@@ -235,17 +249,24 @@ const deleteStakingData = async(req, res) => {
     const { id } = req.params;
 
     try {
-
-        const deletedData = await Staking.findByIdAndDelete(id);
-
-
-        if (!deletedData) {
+        // Verify ownership before deleting
+        const pool = await Staking.findById(id);
+        if (!pool) {
             return res.status(404).json({
                 success: false,
                 message: `Staking data with ID ${id} not found.`,
             });
         }
 
+        const isAdmin = await checkIsAdmin(req.user.wallet);
+        if (pool.creatorId !== req.user.wallet && !isAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to delete this pool',
+            });
+        }
+
+        await Staking.findByIdAndDelete(id);
 
         res.status(200).json({
             success: true,
@@ -302,6 +323,30 @@ const topUpPoolRewards = async (req, res) => {
     }
 };
 
+// Admin: trigger on-chain pool stats sync
+const { syncAllPools, syncPool } = require('../services/poolSyncService');
+
+const syncPoolStats = async (req, res) => {
+    try {
+        const { poolId, includeEnded } = req.body;
+
+        if (poolId) {
+            const pool = await Staking.findById(poolId);
+            if (!pool) {
+                return res.status(404).json({ success: false, message: 'Pool not found' });
+            }
+            const result = await syncPool(pool);
+            return res.json({ success: true, data: result });
+        }
+
+        const stats = await syncAllPools({ includeEnded: !!includeEnded });
+        res.json({ success: true, data: stats });
+    } catch (error) {
+        logger.error('syncPoolStats error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
     getAllStakingData,
     getStakingDataById,
@@ -311,4 +356,5 @@ module.exports = {
     updateStakingData,
     deleteStakingData,
     topUpPoolRewards,
+    syncPoolStats,
 };

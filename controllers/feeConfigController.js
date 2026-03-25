@@ -5,7 +5,12 @@ const { getFryUsdPrice } = require('../services/priceService');
 const getFeeConfig = async (req, res) => {
   try {
     const config = await FeeConfig.getFeeConfig();
-    return res.status(200).json({ success: true, data: config });
+    const data = config.toObject ? config.toObject() : { ...config };
+    // Override feeRecipient with chain-specific value
+    if (req.chainConfig?.feeRecipient) {
+      data.feeRecipient = req.chainConfig.feeRecipient;
+    }
+    return res.status(200).json({ success: true, data });
   } catch (err) {
     logger.error('getFeeConfig error:', err.message);
     return res.status(500).json({ success: false, message: 'Internal server error' });

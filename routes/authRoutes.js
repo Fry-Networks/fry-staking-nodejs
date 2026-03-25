@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const algosdk = require('algosdk');
 const logger = require('../config/logger');
-const { withFallback } = require('../services/algodService');
+const { withFallbackForChain } = require('../services/algodService');
 const redis = require('../config/redis');
 const rateLimit = require('express-rate-limit');
 const { checkIsAdmin } = require('../middleware/auth');
@@ -97,7 +97,7 @@ router.post('/verify', authLimiter, async (req, res) => {
       ],
       allowEmptySignatures: false,
     });
-    const simResult = await withFallback(async (client) => {
+    const simResult = await withFallbackForChain(req.chainId || 'algorand-mainnet', async (client) => {
       return await client.simulateTransactions(simRequest).do();
     });
     const groupFailure = simResult.txnGroups[0].failureMessage;

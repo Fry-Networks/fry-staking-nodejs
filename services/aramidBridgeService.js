@@ -53,6 +53,12 @@ async function bridgeVoiToAlgorand(amountMicro, destinationAddress, triggerSourc
       return { success: false, error: msg };
     }
 
+    // ── Resolve destination ──────────────────────────────────────────────
+    if (!destinationAddress) {
+      const { addr } = getTreasury('algorand-mainnet');
+      destinationAddress = addr.toString();
+    }
+
     // ── Calculate fee ─────────────────────────────────────────────────────
     const { feeAmount, destinationAmount } = calculateBridgeFee(amountMicro);
 

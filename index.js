@@ -36,6 +36,7 @@ const stakingClaimRoutes = require('./routes/stakingClaimRoutes');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const connectDB = require("./config/db");
+const seedVoiTokens = require('./seeds/voiTokenSeed');
 const app = express();
 app.set('trust proxy', 2);
 app.use(helmet());
@@ -49,7 +50,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(cors({
   origin: 'https://fry.farm',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'cache-control', 'X-Chain-Id'],
+  allowedHeaders: ['Content-Type', 'cache-control', 'X-Chain-Id', 'X-Wallet-Address'],
   credentials: true,
 }));
 
@@ -146,13 +147,16 @@ app.use((err, req, res, _next) => {
   });
 });
 
-// Connect to MongoDB
-connectDB();
+// Connect to MongoDB, then run seeds
+connectDB().then(() => {
+  seedVoiTokens();
+});
 
 // Start cron jobs
 require('./crons/eventPointsCron');
 require('./crons/alphaArcadeResolutionCron');
 require('./crons/deviceVerificationCron');
+require('./crons/poolSyncCron');
 
 // Start the server
 const PORT = process.env.PORT || 5000;

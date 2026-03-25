@@ -89,7 +89,7 @@ const tokenSchema = new mongoose.Schema({
   },
   tokenImage: {
     type: String,
-    required: true,
+    default: '',
   },
   tokenName: {
     type: String,
