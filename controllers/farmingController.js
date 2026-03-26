@@ -11,19 +11,22 @@ function escapeRegex(str) {
 const getAllFarmingData = async (req, res) => {
   try {
     const { tokenName } = req.query;
+    const chainId = req.chainId || 'algorand-mainnet';
 
     const query = tokenName
-      ? { 'rewardToken.name': { $regex: escapeRegex(tokenName), $options: 'i' } }
-      : {};
+      ? { chainId, 'rewardToken.name': { $regex: escapeRegex(tokenName), $options: 'i' } }
+      : { chainId };
 
     const farmingData = await Farming.find(query);
 
     // Aggregate totalStaked from individual staking/withdrawal records
     const [stakeAgg, withdrawAgg] = await Promise.all([
       StakingFarmingToken.aggregate([
+        { $match: { chainId } },
         { $group: { _id: '$poolId', total: { $sum: '$stakedAmount' } } }
       ]),
       FarmingWithdraw.aggregate([
+        { $match: { chainId } },
         { $group: { _id: '$poolId', total: { $sum: '$amount' } } }
       ]),
     ]);
@@ -67,7 +70,8 @@ const getFarmingDataByCreatorId = async (req, res) => {
   const { tokenName } = req.query;
 
   try {
-    const query = { creatorId };
+    const chainId = req.chainId || 'algorand-mainnet';
+    const query = { creatorId, chainId };
 
     if (tokenName) {
       query['rewardToken.name'] = { $regex: escapeRegex(tokenName), $options: 'i' };
@@ -98,7 +102,8 @@ const getFarmingDataByAppId = async (req, res) => {
   const { tokenName } = req.query;
 
   try {
-    const query = { appId: Number(appId) };
+    const chainId = req.chainId || 'algorand-mainnet';
+    const query = { appId: Number(appId), chainId };
 
     // If tokenName is provided, add it as a filter in the query
     if (tokenName) {
@@ -130,7 +135,8 @@ const getFarmingDataByOnlyAppId = async (req, res) => {
   const { appId } = req.params;
 
   try {
-    const query = { appId: Number(appId) };
+    const chainId = req.chainId || 'algorand-mainnet';
+    const query = { appId: Number(appId), chainId };
     const farmingData = await Farming.find(query);
 
     res.status(200).json({
@@ -179,6 +185,7 @@ const addFarmingData = async (req, res) => {
 
   try {
     const newFarming = new Farming({
+      chainId: req.chainId || 'algorand-mainnet',
       creatorId,
       lpToken,
       rewardToken,
@@ -225,9 +232,10 @@ const updateFarmingData = async (req, res) => {
   const { appId } = req.params;
   const updatedData = req.body;
   const numericAppId = Number(appId);
+  const chainId = req.chainId || 'algorand-mainnet';
 
   try {
-    const currentData = await Farming.findOne({ appId: numericAppId });
+    const currentData = await Farming.findOne({ appId: numericAppId, chainId });
 
     if (!currentData) {
       return res.status(404).json({
@@ -237,7 +245,7 @@ const updateFarmingData = async (req, res) => {
     }
 
     const updated = await Farming.findOneAndUpdate(
-      { appId: numericAppId },
+      { appId: numericAppId, chainId },
       {
         $set: updatedData, // Replace all fields with new data
       },

@@ -5,7 +5,8 @@ const { getNftValue } = require("../services/nftPriceOracleService");
 // Get all NFT staking pools
 const getAllPools = async (req, res) => {
   try {
-    const pools = await NftStakingPool.find({}).sort({ createdAt: -1 });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const pools = await NftStakingPool.find({ chainId }).sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -30,7 +31,8 @@ const getPoolByAppId = async (req, res) => {
   const { appId } = req.params;
 
   try {
-    const pool = await NftStakingPool.findOne({ appId: Number(appId) });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const pool = await NftStakingPool.findOne({ appId: Number(appId), chainId });
 
     if (!pool) {
       return res.status(404).json({
@@ -60,7 +62,8 @@ const getPoolsByCreator = async (req, res) => {
   const { wallet } = req.params;
 
   try {
-    const pools = await NftStakingPool.find({ creatorId: wallet }).sort({ createdAt: -1 });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const pools = await NftStakingPool.find({ creatorId: wallet, chainId }).sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -109,6 +112,7 @@ const addPool = async (req, res) => {
 
   try {
     const newPool = new NftStakingPool({
+      chainId: req.chainId || 'algorand-mainnet',
       creatorId,
       appId,
       name,
@@ -156,9 +160,10 @@ const updatePool = async (req, res) => {
   const { appId } = req.params;
   const updatedData = req.body;
   const numericAppId = Number(appId);
+  const chainId = req.chainId || 'algorand-mainnet';
 
   try {
-    const currentPool = await NftStakingPool.findOne({ appId: numericAppId });
+    const currentPool = await NftStakingPool.findOne({ appId: numericAppId, chainId });
 
     if (!currentPool) {
       return res.status(404).json({
@@ -168,7 +173,7 @@ const updatePool = async (req, res) => {
     }
 
     const updated = await NftStakingPool.findOneAndUpdate(
-      { appId: numericAppId },
+      { appId: numericAppId, chainId },
       { $set: updatedData },
       { new: true, runValidators: true }
     );

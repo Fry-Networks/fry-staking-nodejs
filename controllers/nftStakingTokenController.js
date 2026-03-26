@@ -5,16 +5,19 @@ const NftStakingPool = require("../models/nftStakingPoolSchema");
 // Record a new NFT stake
 const addStakedNft = async (req, res) => {
   const { wallet, poolId, appId, nftAsaId, nftName, nftImageUrl } = req.body;
+  const chainId = req.chainId || 'algorand-mainnet';
 
   try {
     // Count existing active stakes BEFORE saving the new one
     const existingCount = await NftStakedToken.countDocuments({
       wallet,
       appId,
+      chainId,
       isActive: true,
     });
 
     const newStake = new NftStakedToken({
+      chainId,
       wallet,
       poolId,
       appId,
@@ -30,7 +33,7 @@ const addStakedNft = async (req, res) => {
     if (existingCount === 0) {
       poolUpdate.$inc.totalStakers = 1;
     }
-    await NftStakingPool.findOneAndUpdate({ appId }, poolUpdate);
+    await NftStakingPool.findOneAndUpdate({ appId, chainId }, poolUpdate);
 
     res.status(201).json({
       success: true,
@@ -53,8 +56,10 @@ const getStakedNftsByWallet = async (req, res) => {
   const { wallet } = req.params;
 
   try {
+    const chainId = req.chainId || 'algorand-mainnet';
     const stakes = await NftStakedToken.find({
       wallet,
+      chainId,
       isActive: true,
     }).sort({ stakedAt: -1 });
 
@@ -81,8 +86,10 @@ const getStakedNftsByPool = async (req, res) => {
   const { appId } = req.params;
 
   try {
+    const chainId = req.chainId || 'algorand-mainnet';
     const stakes = await NftStakedToken.find({
       appId: Number(appId),
+      chainId,
       isActive: true,
     }).sort({ stakedAt: -1 });
 
@@ -107,10 +114,11 @@ const getStakedNftsByPool = async (req, res) => {
 // Unstake an NFT
 const unstakeNft = async (req, res) => {
   const { wallet, appId, nftAsaId } = req.body;
+  const chainId = req.chainId || 'algorand-mainnet';
 
   try {
     const unstaked = await NftStakedToken.findOneAndUpdate(
-      { wallet, appId, nftAsaId, isActive: true },
+      { wallet, appId, nftAsaId, chainId, isActive: true },
       { $set: { isActive: false, unstakedAt: new Date() } },
       { new: true }
     );
@@ -129,6 +137,7 @@ const unstakeNft = async (req, res) => {
     const remainingCount = await NftStakedToken.countDocuments({
       wallet,
       appId,
+      chainId,
       isActive: true,
     });
 
@@ -136,7 +145,7 @@ const unstakeNft = async (req, res) => {
       poolUpdate.$inc.totalStakers = -1;
     }
 
-    await NftStakingPool.findOneAndUpdate({ appId }, poolUpdate);
+    await NftStakingPool.findOneAndUpdate({ appId, chainId }, poolUpdate);
 
     res.status(200).json({
       success: true,

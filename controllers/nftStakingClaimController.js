@@ -5,9 +5,11 @@ const NftStakingPool = require("../models/nftStakingPoolSchema");
 // Record a reward claim
 const addClaim = async (req, res) => {
   const { wallet, poolId, appId, rewardClaimed, txId, feeAmount } = req.body;
+  const chainId = req.chainId || 'algorand-mainnet';
 
   try {
     const newClaim = new NftStakingClaim({
+      chainId,
       wallet,
       poolId,
       appId,
@@ -20,7 +22,7 @@ const addClaim = async (req, res) => {
 
     // Update pool total rewards claimed
     await NftStakingPool.findOneAndUpdate(
-      { appId },
+      { appId, chainId },
       { $inc: { totalRewardsClaimed: rewardClaimed } }
     );
 
@@ -45,7 +47,8 @@ const getClaimsByWallet = async (req, res) => {
   const { wallet } = req.params;
 
   try {
-    const claims = await NftStakingClaim.find({ wallet }).sort({ claimedAt: -1 });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const claims = await NftStakingClaim.find({ wallet, chainId }).sort({ claimedAt: -1 });
 
     res.status(200).json({
       success: true,

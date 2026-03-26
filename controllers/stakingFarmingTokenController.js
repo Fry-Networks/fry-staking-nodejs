@@ -6,6 +6,7 @@ const Farming = require("../models/farmingSchema"); // Import your farming schem
 // Create a new staking farming token entry (user staking in pool)
 const addStakingFarmingToken = async (req, res) => {
   try {
+    req.body.chainId = req.chainId || 'algorand-mainnet';
     const newRecord = new StakingFarmingToken(req.body);
     const savedRecord = await newRecord.save();
     res.status(201).json({ success: true, data: savedRecord });
@@ -21,7 +22,8 @@ const addStakingFarmingToken = async (req, res) => {
 // Get all staking farming records
 const getAllStakingFarmingTokens = async (req, res) => {
   try {
-    const records = await StakingFarmingToken.find();
+    const chainId = req.chainId || 'algorand-mainnet';
+    const records = await StakingFarmingToken.find({ chainId });
     res.status(200).json({ success: true, data: records });
   } catch (error) {
     res.status(500).json({
@@ -61,7 +63,8 @@ const getStakingFarmingTokensByPoolId = async (req, res) => {
   }
 
   try {
-    const data = await StakingFarmingToken.find({ poolId }).sort({ createdAt: -1 });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const data = await StakingFarmingToken.find({ poolId, chainId }).sort({ createdAt: -1 });
 
     if (data.length === 0) {
       return res.status(200).json({ success: true, data: [] });
@@ -90,7 +93,8 @@ const getStakingFarmingByUserAndPool = async (req, res) => {
   }
 
   try {
-    const records = await StakingFarmingToken.find({ poolId, wallet });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const records = await StakingFarmingToken.find({ poolId, wallet, chainId });
 
     if (!records.length) {
       return res.status(404).json({
@@ -100,8 +104,8 @@ const getStakingFarmingByUserAndPool = async (req, res) => {
     }
 
     const totalStaked = records.reduce((sum, rec) => sum + (rec.stakedAmount || 0), 0);
-    
-    const withdrawalRecords = await withdrawFarmingToken.find({ poolId, userWallet: wallet });
+
+    const withdrawalRecords = await withdrawFarmingToken.find({ poolId, userWallet: wallet, chainId });
     const totalWithdrawn = withdrawalRecords.reduce((sum, rec) => sum + (rec.amount || 0), 0);
     const updatedTotalStaked = totalStaked - totalWithdrawn;
 
@@ -129,7 +133,8 @@ const getPoolTokensAndWithdrawn = async (req, res) => {
   }
 
   try {
-    const records = await StakingFarmingToken.find({ poolId });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const records = await StakingFarmingToken.find({ poolId, chainId });
 
     if (!records.length) {
       return res.status(200).json({ success: true, totalBalance: 0 });
@@ -137,7 +142,7 @@ const getPoolTokensAndWithdrawn = async (req, res) => {
 
     const totalStaked = records.reduce((sum, rec) => sum + (rec.stakedAmount || 0), 0);
 
-    const withdrawalRecords = await withdrawFarmingToken.find({ poolId });
+    const withdrawalRecords = await withdrawFarmingToken.find({ poolId, chainId });
     const totalWithdrawn = withdrawalRecords.reduce((sum, rec) => sum + (rec.amount || 0), 0);
     const updatedAmount = totalStaked - totalWithdrawn;
 
@@ -165,8 +170,9 @@ const getFarmingRecordsByAppId = async (req, res) => {
   }
 
   try {
+    const chainId = req.chainId || 'algorand-mainnet';
     // Fetch farming records where the appId matches
-    const records = await Farming.find({ appId: Number(appId) }).sort({ createdAt: -1 });
+    const records = await Farming.find({ appId: Number(appId), chainId }).sort({ createdAt: -1 });
 
     if (!records.length) {
       return res.status(200).json({ success: true, data: [] });
@@ -196,8 +202,9 @@ const getUserFarmingStats = async (req, res) => {
   }
 
   try {
+    const chainId = req.chainId || 'algorand-mainnet';
     // Fetch all staking records by wallet
-    const stakingRecords = await StakingFarmingToken.find({ wallet });
+    const stakingRecords = await StakingFarmingToken.find({ wallet, chainId });
 
     // Calculate total staked amount
     const totalStaked = stakingRecords.reduce((sum, rec) => sum + (rec.stakedAmount || 0), 0);
@@ -206,7 +213,7 @@ const getUserFarmingStats = async (req, res) => {
     // const totalReward = stakingRecords.reduce((sum, rec) => sum + (rec.earnedReward || 0), 0);
 
     // Fetch all withdrawal records by wallet
-    const withdrawalRecords = await withdrawFarmingToken.find({ userWallet: wallet });
+    const withdrawalRecords = await withdrawFarmingToken.find({ userWallet: wallet, chainId });
 
     // Calculate total withdrawn amount
     const totalWithdrawn = withdrawalRecords.reduce((sum, rec) => sum + (rec.amount || 0), 0);
@@ -214,7 +221,7 @@ const getUserFarmingStats = async (req, res) => {
     // Final stake = totalStaked - totalWithdrawn
     const activeStake = totalStaked - totalWithdrawn;
 
-    const userRewards = await claimFarmRewards.find({ walletId: wallet });
+    const userRewards = await claimFarmRewards.find({ walletId: wallet, chainId });
     const totalReward = userRewards.reduce((sum, rec) => sum + (rec.rewardClaimed || 0), 0);
 
     res.status(200).json({
@@ -238,7 +245,8 @@ const getUserFarmingStats = async (req, res) => {
 const getStakingFarmingTokensByWallet = async (req, res) => {
   try {
     const { wallet } = req.params;
-    const records = await StakingFarmingToken.find({ wallet });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const records = await StakingFarmingToken.find({ wallet, chainId });
     res.status(200).json({ success: true, data: records });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

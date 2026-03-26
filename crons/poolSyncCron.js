@@ -61,3 +61,22 @@ cron.schedule('*/5 * * * *', async () => {
 });
 
 logger.info('Pool sync cron: registered (every 5 minutes) — staking, farming, nft-staking, alpha-arcade');
+
+// NFT collection indexer — re-sync stale collections every 6 hours
+const { syncAllCollections } = require('../services/nftCollectionSyncService');
+
+cron.schedule('0 */6 * * *', async () => {
+  const start = Date.now();
+  logger.info('NFT collection sync cron: starting');
+  try {
+    const stats = await syncAllCollections();
+    logger.info(
+      `NFT collection sync cron: completed in ${Date.now() - start}ms — ` +
+      `total=${stats.total} synced=${stats.synced} errors=${stats.errors}`
+    );
+  } catch (error) {
+    logger.error('NFT collection sync cron: error:', error);
+  }
+});
+
+logger.info('NFT collection sync cron: registered (every 6 hours)');
