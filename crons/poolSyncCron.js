@@ -4,6 +4,7 @@ const { syncAllPools } = require('../services/poolSyncService');
 const { syncAllFarmingPools } = require('../services/farmingSyncService');
 const { syncAllNftStakingPools } = require('../services/nftStakingSyncService');
 const { syncAllAlphaArcadePools } = require('../services/alphaArcadeSyncService');
+const { syncAllP2POffers } = require('../services/p2pSyncService');
 
 // Sync on-chain pool stats to MongoDB every 5 minutes
 cron.schedule('*/5 * * * *', async () => {
@@ -57,10 +58,22 @@ cron.schedule('*/5 * * * *', async () => {
     logger.error('Pool sync cron [alpha-arcade]: error:', error);
   }
 
+  // 5. P2P swap offers
+  const p2pStart = Date.now();
+  try {
+    const stats = await syncAllP2POffers();
+    logger.info(
+      `Pool sync cron [p2p-swap]: completed in ${Date.now() - p2pStart}ms — ` +
+      `total=${stats.total} synced=${stats.synced} skipped=${stats.skipped} errors=${stats.errors} expired=${stats.expired}`
+    );
+  } catch (error) {
+    logger.error('Pool sync cron [p2p-swap]: error:', error);
+  }
+
   logger.info(`Pool sync cron: all syncs completed in ${Date.now() - start}ms`);
 });
 
-logger.info('Pool sync cron: registered (every 5 minutes) — staking, farming, nft-staking, alpha-arcade');
+logger.info('Pool sync cron: registered (every 5 minutes) — staking, farming, nft-staking, alpha-arcade, p2p-swap');
 
 // NFT collection indexer — re-sync stale collections every 6 hours
 const { syncAllCollections } = require('../services/nftCollectionSyncService');

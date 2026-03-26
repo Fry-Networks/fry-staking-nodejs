@@ -11,6 +11,8 @@ const FEE_PERCENT_FIELDS = {
   farmingDeposit: "farmingDepositFeePercent",
   farmingWithdraw: "farmingWithdrawFeePercent",
   farmingClaim: "farmingClaimFeePercent",
+  p2pCreate: "p2pCreateFeePercent",
+  p2pAccept: "p2pAcceptFeePercent",
 };
 
 // Grace period: if set, requests without feeTxId are allowed (with warning) until this time

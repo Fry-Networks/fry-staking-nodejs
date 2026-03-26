@@ -218,6 +218,8 @@ const feeConfigUpdateSchema = Joi.object({
   poolCreationFeePercent: Joi.number().min(0).max(50),
   poolCreationFeeUsd: Joi.number().min(0).max(1000),
   communityEventFeePercent: Joi.number().min(0).max(50),
+  p2pCreateFeePercent: Joi.number().min(0).max(50),
+  p2pAcceptFeePercent: Joi.number().min(0).max(50),
   feeRecipient: Joi.string(),
   revShareStakers: Joi.number().min(0).max(100),
   revShareTreasury: Joi.number().min(0).max(100),
@@ -524,6 +526,50 @@ const communityEventConfirmSchema = Joi.object({
   feeTxId: Joi.string().allow('').default(''),
 });
 
+// P2P swap market registration schema
+const p2pMarketCreateSchema = Joi.object({
+  appId: Joi.number().integer().positive().required(),
+  deployTxId: Joi.string().allow('').default(''),
+  offerAssetId: Joi.number().integer().min(0).required(),
+  requestAssetId: Joi.number().integer().min(0).required(),
+  feeBps: Joi.number().integer().min(0).max(10000).required(),
+  offerAssetName: Joi.string().allow('').default(''),
+  offerAssetSymbol: Joi.string().allow('').default(''),
+  requestAssetName: Joi.string().allow('').default(''),
+  requestAssetSymbol: Joi.string().allow('').default(''),
+});
+
+// P2P swap offer creation schema
+const p2pOfferCreateSchema = Joi.object({
+  marketAppId: Joi.number().integer().positive().required(),
+  offerId: Joi.number().integer().min(0).required(),
+  escrowTxId: Joi.string().required(),
+  offerAmount: Joi.string().pattern(/^[1-9][0-9]*$/).required(),
+  requestAmount: Joi.string().pattern(/^[1-9][0-9]*$/).required(),
+  offerType: Joi.string().valid('public', 'private').default('public'),
+  counterparty: Joi.string().allow('').default(''),
+  expiresAt: Joi.date().allow(null).default(null),
+  feeTxId: Joi.string().allow('').optional(),
+  feeAssetId: Joi.number().optional(),
+});
+
+// P2P swap offer accept schema
+const p2pOfferAcceptSchema = Joi.object({
+  chainId: Joi.string().optional(),
+  marketAppId: Joi.number().integer().positive().required(),
+  settlementTxId: Joi.string().required(),
+  requestAmount: Joi.number().integer().positive().required(),
+  feeTxId: Joi.string().allow('').optional(),
+  feeAssetId: Joi.number().optional(),
+});
+
+// P2P swap offer cancel schema
+const p2pOfferCancelSchema = Joi.object({
+  chainId: Joi.string().optional(),
+  marketAppId: Joi.number().integer().positive().required(),
+  cancelTxId: Joi.string().required(),
+});
+
 module.exports = {
   validate,
   stakingSchema,
@@ -559,4 +605,8 @@ module.exports = {
   stakeDeviceSchema,
   createAnnouncementSchema,
   linkWalletSchema,
+  p2pMarketCreateSchema,
+  p2pOfferCreateSchema,
+  p2pOfferAcceptSchema,
+  p2pOfferCancelSchema,
 };

@@ -26,6 +26,7 @@ const chains = {
     feeRecipient: process.env.FEE_RECIPIENT || 'E2F2LT2INE75DBOYHQXTCTOP2PAP5MHAXQRXTTCCXFKHQTVG36DJONBQZE',
     indexerRetry: { maxAttempts: 3, delayMs: 3000 },
     explorerBaseUrl: 'https://explorer.perawallet.app',
+    p2pMarkets: [{ appId: 3494825276, name: 'FRY/ALGO' }],
     features: {
       staking: true,
       farming: true,
@@ -34,6 +35,7 @@ const chains = {
       swap: true,
       predictionLp: true,
       communityEvents: true,
+      p2pSwap: true,
     },
   },
   'voi-mainnet': {
@@ -54,6 +56,7 @@ const chains = {
     feeRecipient: 'NQA76E235VCMZB4KZQSV6IU64IWF2GGCXK4Y3QA7N7ZMI7MVHUQVV5BUD4',
     indexerRetry: { maxAttempts: 6, delayMs: 5000 },
     explorerBaseUrl: 'https://explorer.voi.network',
+    p2pMarkets: [{ appId: 48999768, name: 'FRY/VOI' }],
     features: {
       staking: true,
       farming: true,
@@ -62,6 +65,7 @@ const chains = {
       swap: false,
       predictionLp: false,
       communityEvents: false,
+      p2pSwap: true,
     },
   },
 };

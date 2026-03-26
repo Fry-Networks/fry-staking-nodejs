@@ -37,6 +37,10 @@ const feeConfigSchema = new mongoose.Schema(
     // Community event creation fee (percentage of reward pool)
     communityEventFeePercent: { type: Number, default: 2.0 },
 
+    // P2P swap fees
+    p2pCreateFeePercent: { type: Number, default: 1.0 },
+    p2pAcceptFeePercent: { type: Number, default: 1.0 },
+
     // Fee recipient wallet
     feeRecipient: {
       type: String,
