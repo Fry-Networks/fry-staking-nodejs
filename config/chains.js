@@ -56,8 +56,8 @@ const chains = {
     explorerBaseUrl: 'https://explorer.voi.network',
     features: {
       staking: true,
-      farming: false,
-      nftStaking: false,
+      farming: true,
+      nftStaking: true,
       deviceStaking: false,
       swap: false,
       predictionLp: false,

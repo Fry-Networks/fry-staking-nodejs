@@ -3,6 +3,7 @@ const claimFarmRewards = require('../models/claimFarmRewardsSchema');
 // Add a new claimed farm reward
 const addClaimFarmReward = async (req, res) => {
   try {
+    req.body.chainId = req.chainId || 'algorand-mainnet';
     const newClaim = new claimFarmRewards(req.body);
     const savedClaim = await newClaim.save();
     res.status(201).json({ success: true, data: savedClaim });
@@ -18,7 +19,8 @@ const addClaimFarmReward = async (req, res) => {
 // Get all claimed farm rewards
 const getAllClaimFarmRewards = async (req, res) => {
   try {
-    const rewards = await claimFarmRewards.find().sort({ createdAt: -1 });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const rewards = await claimFarmRewards.find({ chainId }).sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: rewards });
   } catch (error) {
     res.status(500).json({
@@ -33,7 +35,8 @@ const getAllClaimFarmRewards = async (req, res) => {
 const getClaimFarmRewardsByWallet = async (req, res) => {
   try {
     const { walletId } = req.params;
-    const rewards = await claimFarmRewards.find({ walletId }).sort({ createdAt: -1 });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const rewards = await claimFarmRewards.find({ walletId, chainId }).sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: rewards });
   } catch (error) {
     res.status(500).json({
@@ -48,7 +51,8 @@ const getClaimFarmRewardsByWallet = async (req, res) => {
 const getClaimFarmRewardsByPool = async (req, res) => {
   try {
     const { poolId } = req.params;
-    const rewards = await claimFarmRewards.find({ poolId }).sort({ createdAt: -1 });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const rewards = await claimFarmRewards.find({ poolId, chainId }).sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: rewards });
   } catch (error) {
     res.status(500).json({

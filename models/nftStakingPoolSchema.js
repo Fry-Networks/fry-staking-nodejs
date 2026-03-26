@@ -98,6 +98,10 @@ const nftStakingPoolSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  contractType: {
+    type: String,
+    default: '',
+  },
   totalNftsStaked: {
     type: Number,
     default: 0,

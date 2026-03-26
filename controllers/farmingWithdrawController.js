@@ -11,6 +11,7 @@ const addFarmingWithdrawLog = async (req, res) => {
     }
 
     const newWithdrawal = new FarmingWithdraw({
+      chainId: req.chainId || 'algorand-mainnet',
       amount,
       userWallet,
       poolId,
@@ -37,7 +38,8 @@ const addFarmingWithdrawLog = async (req, res) => {
 // Get all farming token withdrawal logs
 const getAllFarmingWithdrawals = async (req, res) => {
   try {
-    const logs = await FarmingWithdraw.find().sort({ timestamp: -1 });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const logs = await FarmingWithdraw.find({ chainId }).sort({ timestamp: -1 });
     res.status(200).json({
       success: true,
       data: logs,
@@ -56,7 +58,8 @@ const getAllFarmingWithdrawals = async (req, res) => {
 const getFarmingWithdrawalsByWallet = async (req, res) => {
   try {
     const { wallet } = req.params;
-    const logs = await FarmingWithdraw.find({ userWallet: wallet }).sort({ timestamp: -1 });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const logs = await FarmingWithdraw.find({ userWallet: wallet, chainId }).sort({ timestamp: -1 });
 
     res.status(200).json({
       success: true,
@@ -76,7 +79,8 @@ const getFarmingWithdrawalsByWallet = async (req, res) => {
 const getFarmingWithdrawalsByPool = async (req, res) => {
   try {
     const { poolId } = req.params;
-    const logs = await FarmingWithdraw.find({ poolId }).sort({ timestamp: -1 });
+    const chainId = req.chainId || 'algorand-mainnet';
+    const logs = await FarmingWithdraw.find({ poolId, chainId }).sort({ timestamp: -1 });
 
     res.status(200).json({
       success: true,
