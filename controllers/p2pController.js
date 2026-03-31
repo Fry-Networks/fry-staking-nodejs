@@ -48,7 +48,14 @@ const getMarketDetail = async (req, res) => {
     const chainId = req.chainId || 'algorand-mainnet';
     const appId = Number(req.params.appId);
 
-    const market = await P2PMarket.findOne({ chainId, appId });
+    let market = await P2PMarket.findOne({ chainId, appId });
+
+    // Cross-chain fallback: if not found on the requested chain, try any chain.
+    // Enables shared market links to work regardless of the user's current chain.
+    if (!market) {
+      market = await P2PMarket.findOne({ appId });
+    }
+
     if (!market) {
       return res.status(404).json({
         success: false,
