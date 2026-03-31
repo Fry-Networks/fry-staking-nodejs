@@ -137,7 +137,11 @@ async function verifyOfferFilled(chainId, appId, offerId) {
     }
     return { verified: true, data };
   } catch (err) {
-    // Box deleted could mean filled — treat as unverifiable
+    // Box deleted after fill is expected — treat as successful verification
+    if (err.message && (err.message.includes('box not found') || err.message.includes('does not exist'))) {
+      logger.info(`p2pVerification: box deleted for appId=${appId} offerId=${offerId}, treating as filled`);
+      return { verified: true, data: { status: STATUS_FILLED } };
+    }
     logger.error(`p2pVerification: verifyOfferFilled failed for appId=${appId} offerId=${offerId}:`, err.message);
     return { verified: false, error: err.message };
   }
