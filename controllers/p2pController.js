@@ -597,6 +597,14 @@ const acceptOffer = async (req, res) => {
       });
     }
 
+    // 2.5 Reject expired offers
+    if (offer.expiresAt && new Date() > new Date(offer.expiresAt)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Offer has expired.',
+      });
+    }
+
     // 3. Verify on-chain: offer is filled
     const verification = await verifyOfferFilled(chainId, marketAppId, onChainOfferId);
     if (!verification.verified) {
