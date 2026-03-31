@@ -17,10 +17,21 @@ const getMarkets = async (req, res) => {
     const chainId = req.chainId || 'algorand-mainnet';
     const markets = await P2PMarket.find({ chainId, isActive: true }).sort({ createdAt: -1 });
 
+    // Enrich with open offer counts
+    const offerCounts = await P2POffer.aggregate([
+      { $match: { chainId, status: 'open' } },
+      { $group: { _id: '$marketAppId', count: { $sum: 1 } } },
+    ]);
+    const countMap = Object.fromEntries(offerCounts.map(c => [c._id, c.count]));
+    const enriched = markets.map(m => ({
+      ...m.toObject(),
+      openOfferCount: countMap[m.appId] || 0,
+    }));
+
     res.status(200).json({
       success: true,
       message: 'Markets fetched successfully.',
-      data: markets,
+      data: enriched,
     });
   } catch (error) {
     logger.error('P2P getMarkets error:', error);
@@ -148,10 +159,11 @@ const getMyOffers = async (req, res) => {
   try {
     const chainId = req.chainId || 'algorand-mainnet';
     const wallet = req.user.wallet;
-    const { status, page = 1, limit = 50 } = req.query;
+    const { status, marketAppId, page = 1, limit = 50 } = req.query;
 
     const query = { makerWallet: wallet, chainId };
     if (status) query.status = status;
+    if (marketAppId) query.marketAppId = Number(marketAppId);
 
     const pageNum = Math.max(1, Number(page));
     const limitNum = Math.min(200, Math.max(1, Number(limit)));
@@ -187,7 +199,7 @@ const getHistory = async (req, res) => {
   try {
     const chainId = req.chainId || 'algorand-mainnet';
     const wallet = req.user.wallet;
-    const { page = 1, limit = 50 } = req.query;
+    const { marketAppId, page = 1, limit = 50 } = req.query;
 
     const pageNum = Math.max(1, Number(page));
     const limitNum = Math.min(200, Math.max(1, Number(limit)));
@@ -197,6 +209,7 @@ const getHistory = async (req, res) => {
       chainId,
       $or: [{ makerWallet: wallet }, { takerWallet: wallet }],
     };
+    if (marketAppId) query.marketAppId = Number(marketAppId);
 
     const [trades, total] = await Promise.all([
       P2PTrade.find(query).sort({ settledAt: -1 }).skip(skip).limit(limitNum),
@@ -279,6 +292,98 @@ const getReputation = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'An error occurred while fetching reputation.',
+      error: error.message,
+    });
+  }
+};
+
+const getMarketStats = async (req, res) => {
+  try {
+    const chainId = req.chainId || 'algorand-mainnet';
+    const appId = Number(req.params.appId);
+
+    const [openOffers, totalOffers, tradeAgg] = await Promise.all([
+      P2POffer.countDocuments({ chainId, marketAppId: appId, status: 'open' }),
+      P2POffer.countDocuments({ chainId, marketAppId: appId }),
+      P2PTrade.aggregate([
+        { $match: { chainId, marketAppId: appId } },
+        {
+          $group: {
+            _id: null,
+            totalTrades: { $sum: 1 },
+            totalOfferVolume: { $sum: { $toLong: '$offerAmount' } },
+            totalRequestVolume: { $sum: { $toLong: '$requestAmount' } },
+            totalFees: { $sum: { $toLong: '$feeAmount' } },
+            firstTrade: { $min: '$settledAt' },
+            lastTrade: { $max: '$settledAt' },
+          },
+        },
+      ]),
+    ]);
+
+    const stats = tradeAgg[0] || {
+      totalTrades: 0, totalOfferVolume: 0, totalRequestVolume: 0,
+      totalFees: 0, firstTrade: null, lastTrade: null,
+    };
+
+    res.status(200).json({
+      success: true,
+      message: 'Market stats fetched successfully.',
+      data: {
+        appId,
+        openOffers,
+        totalOffers,
+        totalTrades: stats.totalTrades,
+        totalOfferVolume: String(stats.totalOfferVolume),
+        totalRequestVolume: String(stats.totalRequestVolume),
+        totalFees: String(stats.totalFees),
+        firstTrade: stats.firstTrade,
+        lastTrade: stats.lastTrade,
+      },
+    });
+  } catch (error) {
+    logger.error('P2P getMarketStats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while fetching market stats.',
+      error: error.message,
+    });
+  }
+};
+
+const getMarketTrades = async (req, res) => {
+  try {
+    const chainId = req.chainId || 'algorand-mainnet';
+    const appId = Number(req.params.appId);
+    const { page = 1, limit = 50 } = req.query;
+
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.min(200, Math.max(1, Number(limit)));
+    const skip = (pageNum - 1) * limitNum;
+
+    const query = { chainId, marketAppId: appId };
+
+    const [trades, total] = await Promise.all([
+      P2PTrade.find(query).sort({ settledAt: -1 }).skip(skip).limit(limitNum),
+      P2PTrade.countDocuments(query),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: 'Market trades fetched successfully.',
+      data: trades,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (error) {
+    logger.error('P2P getMarketTrades error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while fetching market trades.',
       error: error.message,
     });
   }
@@ -647,6 +752,8 @@ const cancelOffer = async (req, res) => {
 module.exports = {
   getMarkets,
   getMarketDetail,
+  getMarketStats,
+  getMarketTrades,
   getOffers,
   getOffer,
   getMyOffers,

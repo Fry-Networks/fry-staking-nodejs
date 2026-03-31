@@ -87,10 +87,10 @@ async function verifyMarketDeployment(chainId, appId, expectedCreator) {
     const client = getAlgodClientForChain(chainId);
     const appInfo = await client.getApplicationByID(appId).do();
 
-    const creator = appInfo.params.creator;
+    const creator = String(appInfo.params.creator).trim();
     const appAddress = algosdk.getApplicationAddress(appId);
 
-    if (expectedCreator && creator !== expectedCreator) {
+    if (expectedCreator && creator !== String(expectedCreator).trim()) {
       return {
         verified: false,
         error: `Creator mismatch: expected ${expectedCreator}, got ${creator}`,

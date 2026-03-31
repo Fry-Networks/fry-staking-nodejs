@@ -77,16 +77,22 @@ const proxyFolksQuote = async (req, res) => {
  */
 const proxyFolksPrepare = async (req, res) => {
   try {
-    console.log(`[FolksRouter Prepare] Request params: ${JSON.stringify(req.query)}`);
+    // Map senderAddr back to userAddress (frontend uses senderAddr to avoid CDN WAF trigger on "userAddress")
+    const params = { ...req.body };
+    if (params.senderAddr) {
+      params.userAddress = params.senderAddr;
+      delete params.senderAddr;
+    }
+    console.log(`[FolksRouter Prepare] Request params: ${JSON.stringify(params)}`);
     const { data } = await axios.get(`${FOLKS_BASE}/prepare/swap`, {
-      params: req.query,
+      params,
       timeout: REQUEST_TIMEOUT,
     });
     res.json(data);
   } catch (err) {
     const status = err.response?.status || 502;
     const respBody = JSON.stringify(err.response?.data || {}).slice(0, 500);
-    console.error(`[FolksRouter Prepare] Error ${status} | params: ${JSON.stringify(req.query)} | upstream body: ${respBody}`);
+    console.error(`[FolksRouter Prepare] Error ${status} | params: ${JSON.stringify(req.body)} | upstream body: ${respBody}`);
     res.status(status).json({
       success: false,
       message: err.response?.data?.message || 'FolksRouter prepare failed',

@@ -15,7 +15,7 @@ router.use(algorandOnly);
 
 // FolksRouter
 router.get('/folks/quote', proxyFolksQuote);
-router.get('/folks/prepare', proxyFolksPrepare);
+router.post('/folks/prepare', proxyFolksPrepare);
 
 // Vestige
 router.get('/vestige/quote', proxyVestigeQuote);

@@ -12,6 +12,8 @@ const { requireFeePayment } = require('../middleware/requireFeePayment');
 const {
   getMarkets,
   getMarketDetail,
+  getMarketStats,
+  getMarketTrades,
   getOffers,
   getOffer,
   getMyOffers,
@@ -26,6 +28,8 @@ const {
 // Public read routes
 router.get('/markets', getMarkets);
 router.get('/markets/:appId', getMarketDetail);
+router.get('/markets/:appId/stats', getMarketStats);
+router.get('/markets/:appId/trades', getMarketTrades);
 router.get('/offers', getOffers);
 router.get('/offers/:chainId/:marketAppId/:offerId', getOffer);
 router.get('/reputation/:walletAddress', getReputation);
