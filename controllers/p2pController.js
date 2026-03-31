@@ -15,7 +15,7 @@ const {
 const getMarkets = async (req, res) => {
   try {
     const chainId = req.chainId || 'algorand-mainnet';
-    const markets = await P2PMarket.find({ chainId, isActive: true }).sort({ createdAt: -1 });
+    const markets = await P2PMarket.find({ chainId, isActive: true, isPrivate: { $ne: true } }).sort({ createdAt: -1 });
 
     // Enrich with open offer counts
     const offerCounts = await P2POffer.aggregate([
@@ -447,6 +447,8 @@ const createMarket = async (req, res) => {
       feeRecipient: req.chainConfig.feeRecipient,
       feeBps,
       isActive: true,
+      isPrivate: req.body.isPrivate || false,
+      gatedWallet: req.body.gatedWallet || '',
       deployTxId: deployTxId || undefined,
     });
 

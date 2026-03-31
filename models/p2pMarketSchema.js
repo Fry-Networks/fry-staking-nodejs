@@ -46,6 +46,14 @@ const p2pMarketSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isPrivate: {
+      type: Boolean,
+      default: false,
+    },
+    gatedWallet: {
+      type: String,
+      default: '',
+    },
     deployTxId: {
       type: String,
       unique: true,
@@ -58,6 +66,7 @@ const p2pMarketSchema = new mongoose.Schema(
 p2pMarketSchema.index({ chainId: 1, appId: 1 }, { unique: true });
 p2pMarketSchema.index({ chainId: 1, isActive: 1 });
 p2pMarketSchema.index({ chainId: 1, offerAssetId: 1, requestAssetId: 1 });
+p2pMarketSchema.index({ chainId: 1, isActive: 1, isPrivate: 1 });
 
 const P2PMarket = mongoose.model('P2PMarket', p2pMarketSchema, 'p2pMarkets');
 

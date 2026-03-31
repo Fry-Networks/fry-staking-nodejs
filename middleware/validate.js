@@ -537,6 +537,8 @@ const p2pMarketCreateSchema = Joi.object({
   offerAssetSymbol: Joi.string().allow('').default(''),
   requestAssetName: Joi.string().allow('').default(''),
   requestAssetSymbol: Joi.string().allow('').default(''),
+  isPrivate: Joi.boolean().default(false),
+  gatedWallet: Joi.string().allow('').default(''),
 });
 
 // P2P swap offer creation schema
