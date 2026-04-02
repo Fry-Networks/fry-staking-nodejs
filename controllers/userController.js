@@ -74,8 +74,10 @@ const createOrUpdateUser = async (req, res) => {
           message: "name is required when creating a new user.",
         });
       }
+      const chainId = req.headers['x-chain-id'] || 'algorand-mainnet';
       const created = await User.create({
         walletId,
+        chainId,
         name: updateDoc.name,
         bio: typeof updateDoc.bio !== "undefined" ? updateDoc.bio : undefined,
         profilePicture: updateDoc.profilePicture,
