@@ -34,6 +34,8 @@ const chainMiddleware = require('./middleware/chainMiddleware');
 const chainRoutes = require('./routes/chainRoutes');
 const stakingClaimRoutes = require('./routes/stakingClaimRoutes');
 const p2pRoute = require('./routes/p2pRoute');
+const discordRoutes = require('./routes/discordRoutes');
+const bugReportRoutes = require('./routes/bugReportRoutes');
 
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -133,6 +135,8 @@ app.use("/ai", writeLimiter, aiRoutes);
 app.use("/chains", readLimiter, chainRoutes);
 app.use("/staking-claim", readLimiter, stakingClaimRoutes);
 app.use("/p2p", readLimiter, p2pRoute);
+app.use("/discord", readLimiter, discordRoutes);
+app.use("/bug-reports", writeLimiter, bugReportRoutes);
 
 // 404 handler for undefined routes
 app.use((req, res) => {

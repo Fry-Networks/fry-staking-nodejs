@@ -30,6 +30,20 @@ const userSchema = new mongoose.Schema({
     required: false, // Optional field
     trim: true, // Trims any leading/trailing spaces
   },
+  discordId: {
+    type: String,
+    index: true,
+    sparse: true,
+  },
+  discordUsername: {
+    type: String,
+  },
+  discordAvatar: {
+    type: String,
+  },
+  discordLinkedAt: {
+    type: Date,
+  },
 }, {
   timestamps: true, // Adds createdAt and updatedAt automatically
   collection: 'users' // MongoDB collection name
