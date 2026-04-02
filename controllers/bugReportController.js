@@ -29,6 +29,9 @@ const bugReportSchema = Joi.object({
   title: Joi.string().max(100).required(),
   description: Joi.string().max(2000).required(),
   category: Joi.string().valid('ui', 'staking', 'farming', 'nft-staking', 'swap', 'prediction', 'device-staking', 'other').required(),
+  harFilePreUploaded: Joi.string().max(255).optional(),
+  consoleLogPreUploaded: Joi.string().max(255).optional(),
+  screenshotPreUploaded: Joi.string().max(255).optional(),
 });
 
 /** Remove all uploaded files from this request (cleanup on validation failure or error) */
