@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
@@ -7,8 +8,16 @@ const { createBugReport, listBugReports } = require('../controllers/bugReportCon
 const router = express.Router();
 
 const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB overall limit (HAR files)
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, '/app/uploads/bug-reports/');
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+    },
+  }),
+  limits: { fileSize: 1 * 1024 * 1024 * 1024 }, // 1GB
 });
 
 const bugReportLimiter = rateLimit({

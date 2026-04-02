@@ -16,7 +16,7 @@ const ALLOWED_HAR_EXTS = ['.har', '.json'];
 
 const MAX_SCREENSHOT_SIZE = 5 * 1024 * 1024;  // 5MB
 const MAX_LOG_SIZE = 2 * 1024 * 1024;         // 2MB
-const MAX_HAR_SIZE = 10 * 1024 * 1024;        // 10MB
+const MAX_HAR_SIZE = 1 * 1024 * 1024 * 1024;  // 1GB
 
 const bugReportSchema = Joi.object({
   chain: Joi.string().valid('algorand', 'voi').required(),
@@ -26,24 +26,20 @@ const bugReportSchema = Joi.object({
   category: Joi.string().valid('ui', 'staking', 'farming', 'nft-staking', 'swap', 'prediction', 'device-staking', 'other').required(),
 });
 
-function saveFile(file, wallet, fieldName) {
-  const ext = path.extname(file.originalname).toLowerCase() || '.bin';
-  const filename = `${wallet}_${fieldName}_${Date.now()}${ext}`;
-  const filePath = path.join(UPLOAD_DIR, filename);
-  fs.writeFileSync(filePath, file.buffer);
-  return `/uploads/bug-reports/${filename}`;
-}
-
-function cleanupFile(filePath) {
-  if (filePath) {
-    const fullPath = path.join(__dirname, '..', filePath);
-    try { fs.unlinkSync(fullPath); } catch (_) { /* ignore */ }
+/** Remove all uploaded files from this request (cleanup on validation failure or error) */
+function cleanupRequestFiles(files) {
+  if (!files) return;
+  for (const fieldFiles of Object.values(files)) {
+    for (const file of fieldFiles) {
+      try { fs.unlinkSync(file.path); } catch (_) { /* ignore */ }
+    }
   }
 }
 
 const createBugReport = async (req, res) => {
   const { error, value } = bugReportSchema.validate(req.body);
   if (error) {
+    cleanupRequestFiles(req.files);
     return res.status(400).json({ success: false, message: error.details[0].message });
   }
 
@@ -54,47 +50,51 @@ const createBugReport = async (req, res) => {
   const logFile = files.consoleLog?.[0];
   const harFile = files.harFile?.[0];
 
-  // ── Phase 1: Validate ALL files before writing ANY to disk ──
+  // ── Validate files (multer already wrote them to disk) ──
 
   if (screenshotFile) {
     if (screenshotFile.size > MAX_SCREENSHOT_SIZE) {
+      cleanupRequestFiles(req.files);
       return res.status(400).json({ success: false, message: 'Screenshot must be under 5MB' });
     }
-    const detected = await fileTypeFromBuffer(screenshotFile.buffer);
+    const header = Buffer.alloc(4100);
+    const fd = fs.openSync(screenshotFile.path, 'r');
+    fs.readSync(fd, header, 0, 4100, 0);
+    fs.closeSync(fd);
+    const detected = await fileTypeFromBuffer(header);
     if (!detected || !ALLOWED_IMAGE_TYPES.includes(detected.mime)) {
+      cleanupRequestFiles(req.files);
       return res.status(400).json({ success: false, message: 'Screenshot must be JPEG, PNG, or WebP' });
     }
   }
 
   if (logFile) {
     if (logFile.size > MAX_LOG_SIZE) {
+      cleanupRequestFiles(req.files);
       return res.status(400).json({ success: false, message: 'Console log must be under 2MB' });
     }
     const ext = path.extname(logFile.originalname).toLowerCase();
     if (!ALLOWED_LOG_EXTS.includes(ext)) {
+      cleanupRequestFiles(req.files);
       return res.status(400).json({ success: false, message: 'Console log must be .txt or .log' });
     }
   }
 
   if (harFile) {
     if (harFile.size > MAX_HAR_SIZE) {
-      return res.status(400).json({ success: false, message: 'HAR file must be under 10MB' });
+      cleanupRequestFiles(req.files);
+      return res.status(400).json({ success: false, message: 'HAR file must be under 1GB' });
     }
     const ext = path.extname(harFile.originalname).toLowerCase();
     if (!ALLOWED_HAR_EXTS.includes(ext)) {
+      cleanupRequestFiles(req.files);
       return res.status(400).json({ success: false, message: 'HAR file must be .har or .json' });
     }
   }
 
-  // ── Phase 2: All validations passed — write files to disk ──
-
-  const savedPaths = {};
+  // ── All validations passed — files are already on disk from multer ──
 
   try {
-    if (screenshotFile) savedPaths.screenshot = saveFile(screenshotFile, wallet, 'screenshot');
-    if (logFile) savedPaths.consoleLog = saveFile(logFile, wallet, 'console');
-    if (harFile) savedPaths.harFile = saveFile(harFile, wallet, 'har');
-
     // Look up Discord username if linked
     let discordUsername;
     try {
@@ -112,9 +112,9 @@ const createBugReport = async (req, res) => {
       title: value.title,
       description: value.description,
       category: value.category,
-      screenshot: savedPaths.screenshot,
-      consoleLog: savedPaths.consoleLog,
-      harFile: savedPaths.harFile,
+      screenshot: screenshotFile ? `/uploads/bug-reports/${screenshotFile.filename}` : undefined,
+      consoleLog: logFile ? `/uploads/bug-reports/${logFile.filename}` : undefined,
+      harFile: harFile ? `/uploads/bug-reports/${harFile.filename}` : undefined,
     });
 
     // Send Discord webhook (async, don't block response)
@@ -124,8 +124,7 @@ const createBugReport = async (req, res) => {
 
     return res.status(201).json({ success: true, id: report._id });
   } catch (err) {
-    // Cleanup any saved files on error
-    Object.values(savedPaths).forEach(cleanupFile);
+    cleanupRequestFiles(req.files);
     logger.error('Error creating bug report:', err);
     return res.status(500).json({ success: false, message: 'Failed to submit bug report' });
   }

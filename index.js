@@ -165,6 +165,7 @@ require('./crons/eventPointsCron');
 require('./crons/alphaArcadeResolutionCron');
 require('./crons/deviceVerificationCron');
 require('./crons/poolSyncCron');
+require('./crons/bugReportCleanup');
 
 // Start the server
 const PORT = process.env.PORT || 5000;
