@@ -48,7 +48,8 @@ router.get('/link', requireAuth, async (req, res) => {
     }
 
     const state = crypto.randomBytes(32).toString('hex');
-    await redis.set(`discord_state:${state}`, req.user.wallet, 'EX', STATE_TTL_SEC);
+    const chainId = req.headers['x-chain-id'] || 'algorand-mainnet';
+    await redis.set(`discord_state:${state}`, JSON.stringify({ wallet: req.user.wallet, chainId }), 'EX', STATE_TTL_SEC);
 
     const params = new URLSearchParams({
       client_id: DISCORD_CLIENT_ID,
@@ -81,12 +82,23 @@ router.get('/callback', async (req, res) => {
   }
 
   try {
-    // Validate state and get wallet
-    const wallet = await redis.get(`discord_state:${state}`);
-    if (!wallet) {
+    // Validate state and get wallet + chainId
+    const stateData = await redis.get(`discord_state:${state}`);
+    if (!stateData) {
       return sendOauthResult(res, 'error', 'invalid_state');
     }
     await redis.del(`discord_state:${state}`);
+
+    let wallet, chainId;
+    try {
+      const parsed = JSON.parse(stateData);
+      wallet = parsed.wallet;
+      chainId = parsed.chainId || 'algorand-mainnet';
+    } catch {
+      // Backwards compat: old Redis state was plain wallet string
+      wallet = stateData;
+      chainId = 'algorand-mainnet';
+    }
 
     // Exchange code for access token
     const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
@@ -120,8 +132,8 @@ router.get('/callback', async (req, res) => {
 
     const discordUser = await userRes.json();
 
-    // Check if this Discord account is already linked to another wallet
-    const existing = await User.findOne({ discordId: discordUser.id, walletId: { $ne: wallet } });
+    // Check if this Discord account is already linked to another wallet on the same chain
+    const existing = await User.findOne({ discordId: discordUser.id, walletId: { $ne: wallet }, chainId });
     if (existing) {
       return sendOauthResult(res, 'error', 'already_linked');
     }
