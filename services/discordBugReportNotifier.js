@@ -31,13 +31,12 @@ async function sendBugReport(report) {
 
   fields.push({ name: 'Description', value: report.description.slice(0, 1024), inline: false });
 
-  // Attachment indicators
-  const attachments = [
-    `Console Log: ${report.consoleLog ? 'Yes' : 'No'}`,
-    `HAR File: ${report.harFile ? 'Yes' : 'No'}`,
-    `Screenshot: ${report.screenshot ? 'Yes' : 'No'}`,
-  ].join(' | ');
-  fields.push({ name: 'Attachments', value: attachments, inline: false });
+  // Attachment links
+  const attachments = [];
+  if (report.consoleLog) attachments.push(`[Console Log](https://fry.farm${report.consoleLog})`);
+  if (report.harFile) attachments.push(`[HAR File](https://fry.farm${report.harFile})`);
+  if (report.screenshot) attachments.push(`[Screenshot](https://fry.farm${report.screenshot})`);
+  fields.push({ name: 'Attachments', value: attachments.length > 0 ? attachments.join(' | ') : 'None', inline: false });
 
   const embed = {
     embeds: [{
