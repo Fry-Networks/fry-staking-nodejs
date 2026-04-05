@@ -49,6 +49,17 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const path = require("path");
+
+// GitHub OAuth-gated bug report file downloads
+const { router: githubAuthRouter, requireGithubAuth, serveUploadFile } = require('./services/githubAuthMiddleware');
+
+// Auth routes (login + callback) — no auth required
+app.use('/uploads', githubAuthRouter);
+
+// Bug report files — GitHub OAuth required
+app.get('/uploads/bug-reports/:filename', requireGithubAuth, serveUploadFile);
+
+// All other uploads (avatars, banners) — still public
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use(cors({
