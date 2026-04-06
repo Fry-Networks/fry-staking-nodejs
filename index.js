@@ -36,6 +36,7 @@ const stakingClaimRoutes = require('./routes/stakingClaimRoutes');
 const p2pRoute = require('./routes/p2pRoute');
 const discordRoutes = require('./routes/discordRoutes');
 const bugReportRoutes = require('./routes/bugReportRoutes');
+const voiCandleRoutes = require('./routes/voiCandleRoutes');
 
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -148,6 +149,7 @@ app.use("/staking-claim", readLimiter, stakingClaimRoutes);
 app.use("/p2p", readLimiter, p2pRoute);
 app.use("/discord", readLimiter, discordRoutes);
 app.use("/bug-reports", writeLimiter, bugReportRoutes);
+app.use("/voi-candles", readLimiter, voiCandleRoutes);
 
 // 404 handler for undefined routes
 app.use((req, res) => {
@@ -177,6 +179,7 @@ require('./crons/alphaArcadeResolutionCron');
 require('./crons/deviceVerificationCron');
 require('./crons/poolSyncCron');
 require('./crons/bugReportCleanup');
+require('./crons/voiPriceSamplerCron');
 
 // Start the server
 const PORT = process.env.PORT || 5000;
