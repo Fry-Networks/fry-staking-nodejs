@@ -375,10 +375,13 @@ const buildWithdraw = async (req, res) => {
 
     const escrowAppIds = [...position.yesEscrowAppIds, ...position.noEscrowAppIds];
 
-    // Calculate withdrawal fee
+    // Compute the actual on-chain token amount (net of deposit fee)
+    const netTokenAmount = position.usdcDeposited - (position.feesPaid?.depositFee || 0);
+
+    // Calculate withdrawal fee from net amount
     const feeConfig = await FeeConfig.getFeeConfig();
     const feeBps = feeConfig.alphaArcadeWithdrawFeePercent * 100;
-    const feeMicro = Math.floor(position.usdcDeposited * feeBps / 10000);
+    const feeMicro = Math.floor(netTokenAmount * feeBps / 10000);
 
     let result;
 
@@ -397,7 +400,7 @@ const buildWithdraw = async (req, res) => {
       result = await alphaArcadeService.buildMergeSharesTxns({
         wallet,
         marketAppId: pool.marketAppId,
-        amount: position.usdcDeposited,
+        amount: netTokenAmount,
         feeWallet: feeConfig.feeRecipient,
         feeMicro,
       });
@@ -697,16 +700,19 @@ const buildClaim = async (req, res) => {
     // Determine winning asset
     const winningAssetId = pool.resolutionOutcome === 'yes' ? pool.yesAsaId : pool.noAsaId;
 
-    // Calculate claim fee (same as withdraw fee)
+    // Compute the actual on-chain token amount (net of deposit fee)
+    const netTokenAmount = position.usdcDeposited - (position.feesPaid?.depositFee || 0);
+
+    // Calculate claim fee from net amount (same rate as withdraw fee)
     const feeConfig = await FeeConfig.getFeeConfig();
     const feeBps = feeConfig.alphaArcadeWithdrawFeePercent * 100;
-    const feeMicro = Math.floor(position.usdcDeposited * feeBps / 10000);
+    const feeMicro = Math.floor(netTokenAmount * feeBps / 10000);
 
     const result = await alphaArcadeService.buildClaimTxns({
       wallet,
       marketAppId: pool.marketAppId,
       assetId: winningAssetId,
-      amount: position.usdcDeposited,
+      amount: netTokenAmount,
       feeWallet: feeConfig.feeRecipient,
       feeMicro,
     });
@@ -719,7 +725,7 @@ const buildClaim = async (req, res) => {
         gasAmount: feeMicro,
         gasType: 'alphaArcadeClaim',
         feeType: 'percentage',
-        baseAmount: position.usdcDeposited,
+        baseAmount: netTokenAmount,
         baseToken: 'USDC',
       }).catch(err => logger.error('Failed to log Alpha Arcade claim fee:', err.message));
     }
