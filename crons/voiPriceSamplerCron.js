@@ -10,6 +10,9 @@ const HUMBLE_POOLS_URL = 'https://api.humble.sh/pools';
 // Fetch timeout to avoid hanging the cron
 const FETCH_TIMEOUT = 15_000;
 
+// wVOI (ARC-200 wrapped VOI) — normalize to native VOI (0) so chart queries match
+const WVOI_ID = 390001;
+
 /**
  * Compute implied price from pool reserves.
  * Returns price of tokenA in terms of tokenB (how much tokenB per 1 tokenA).
@@ -57,9 +60,13 @@ async function sampleNomadexPools() {
 
       const volA = Number(pool.volume?.[0] || 0) / Math.pow(10, decimalsA);
 
+      // Normalize wVOI → native VOI so chart queries for VOI(0) find all pairs
+      const fromId = pool.alphaId === WVOI_ID ? 0 : pool.alphaId;
+      const toId = pool.betaId === WVOI_ID ? 0 : pool.betaId;
+
       samples.push({
-        fromTokenId: pool.alphaId,
-        toTokenId: pool.betaId,
+        fromTokenId: fromId,
+        toTokenId: toId,
         price,
         source: 'nomadex',
         volume: volA,
@@ -104,9 +111,13 @@ async function sampleHumblePools() {
       const price = priceFromReserves(reserveA, reserveB, 6, 6);
       if (price <= 0 || !isFinite(price)) continue;
 
+      // Normalize wVOI → native VOI
+      const fromId = tokA === WVOI_ID ? 0 : tokA;
+      const toId = tokB === WVOI_ID ? 0 : tokB;
+
       samples.push({
-        fromTokenId: tokA,
-        toTokenId: tokB,
+        fromTokenId: fromId,
+        toTokenId: toId,
         price,
         source: 'humble',
         volume: 0,
