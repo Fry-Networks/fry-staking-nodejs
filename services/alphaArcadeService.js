@@ -53,6 +53,7 @@ function getReadClient() {
     activeAddress: dummyAddress,
     matcherAppId: MATCHER_APP_ID,
     usdcAssetId: USDC_ASA_ID,
+    // TODO: move ALPHA_ARCADE_API_KEY to 1Password (op://FryFarm/Alpha Arcade/API Key) and inject via op run
     apiKey: process.env.ALPHA_ARCADE_API_KEY || '',
   });
 

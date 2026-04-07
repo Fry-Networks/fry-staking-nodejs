@@ -34,6 +34,15 @@ const alphaArcadePoolSchema = new mongoose.Schema({
   isActive:             { type: Boolean, default: true },
   isResolved:           { type: Boolean, default: false },
   resolutionOutcome:    { type: String, enum: ['yes', 'no', null], default: null },
+  isRewardMarket:       { type: Boolean, default: false },
+  rewardData: {
+    spreadDistance:      { type: Number, default: 0 },
+    fees:               { type: Number, default: 0 },
+    lastRewardAmount:   { type: Number, default: 0 },
+    lastRewardTs:       { type: Number, default: 0 },
+    minContracts:       { type: Number, default: 0 },
+    lpCount:            { type: Number, default: 0 },
+  },
   lastOnChainSync:      { type: Date, default: null },
   createdAt:            { type: Date, default: Date.now },
 });

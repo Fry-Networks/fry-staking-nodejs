@@ -7,20 +7,17 @@ const GasFee = require("../models/gasFeeSchema");
 const Staking = require("../models/stakingSchema");
 const Farming = require("../models/farmingSchema");
 
-// Estimated APR from spread, using real volume and total market liquidity
-function computeEstimatedApr(pool, market, liquidityData) {
+// Compute APR from spread fees and Alpha Arcade LP reward data.
+// Returns { aprDisplay, aprMeta } — separated for clean frontend rendering.
+function computeApr(pool, market, liquidityData, rewardMarketData) {
   const spreadBps = pool.spreadBps || 50;
-  const poolTvlMicro = pool.totalUsdcDeposited || 0;
   const resolutionTime = pool.marketResolutionTime || 0;
   const now = Math.floor(Date.now() / 1000);
   const daysToResolution = resolutionTime > now ? (resolutionTime - now) / 86400 : 0;
 
-  const twentyFourHrVolume = market?.twentyFourHrVolume || 0; // whole USDC
-
-  // Determine total market liquidity (all LPs, not just fry.farm)
+  // Total market liquidity (all LPs, not just fry.farm)
   let totalLiquidityUsdc = 0;
-  let dataSource = 'estimated';
-
+  let dataSource = 'none';
   if (liquidityData?.totalDepthUsdc > 0) {
     totalLiquidityUsdc = liquidityData.totalDepthUsdc;
     dataSource = 'orderbook-based';
@@ -29,23 +26,47 @@ function computeEstimatedApr(pool, market, liquidityData) {
     dataSource = 'supply-based';
   }
 
-  let estimatedApr;
+  // Spread APR — null if no volume or no liquidity data
+  const twentyFourHrVolume = market?.twentyFourHrVolume || 0;
+  let spreadApr = null;
   if (twentyFourHrVolume > 0 && totalLiquidityUsdc > 0) {
-    // APR = (volume / total_market_liquidity) * spread * 365 * 100
-    estimatedApr = (twentyFourHrVolume / totalLiquidityUsdc) * (spreadBps / 10000) * 365 * 100;
-  } else {
-    // Static fallback: 10% daily turnover assumption
-    estimatedApr = 0.1 * (spreadBps / 10000) * 365 * 100;
-    dataSource = 'estimated';
+    spreadApr = (twentyFourHrVolume / totalLiquidityUsdc) * (spreadBps / 10000) * 365 * 100;
+    spreadApr = Math.round(spreadApr * 100) / 100;
+  }
+
+  // Reward APR — null if not a reward market or no payout data
+  const rm = rewardMarketData || {};
+  const isRewardMarket = !!(rm.rewardsSpreadDistance > 0);
+  const lastRewardAmount = rm.lastRewardAmount || 0; // micro USDC
+  let rewardApr = null;
+  if (isRewardMarket && lastRewardAmount > 0 && totalLiquidityUsdc > 0) {
+    const lastRewardUsdc = lastRewardAmount / 1_000_000;
+    rewardApr = (lastRewardUsdc * 24 * 365) / totalLiquidityUsdc * 100;
+    rewardApr = Math.round(rewardApr * 100) / 100;
+  }
+
+  // Combined — null if both null, capped at 1000%
+  let combinedApr = null;
+  if (spreadApr !== null || rewardApr !== null) {
+    combinedApr = (spreadApr || 0) + (rewardApr || 0);
+    combinedApr = Math.round(combinedApr * 100) / 100;
+    if (combinedApr > 1000) combinedApr = 1000;
   }
 
   return {
-    estimatedApr: Math.round(estimatedApr * 100) / 100,
-    spreadBps,
-    totalLiquidity: poolTvlMicro,
-    totalMarketLiquidityUsdc: Math.round(totalLiquidityUsdc * 100) / 100,
-    daysToResolution: Math.round(daysToResolution * 10) / 10,
-    dataSource,
+    aprDisplay: { spreadApr, rewardApr, combinedApr, dataSource, isRewardMarket },
+    aprMeta: {
+      spreadBps,
+      totalLiquidityUsdc: Math.round(totalLiquidityUsdc * 100) / 100,
+      fryFarmTvlUsdc: (pool.totalUsdcDeposited || 0) / 1_000_000,
+      daysToResolution: Math.round(daysToResolution * 10) / 10,
+      lastRewardAmount,
+      lastRewardTs: rm.lastRewardTs || 0,
+      rewardLpCount: rm.lpRewardCompetitionWalletCount || 0,
+      rewardsSpreadDistance: rm.rewardsSpreadDistance || 0,
+      rewardsMinContracts: rm.rewardsMinContracts || 0,
+      fees: rm.fees || 0, // display only — NOT used in APR calculation
+    },
   };
 }
 
@@ -136,13 +157,18 @@ const getOrderbook = async (req, res) => {
 // GET /pools — list all pools
 const getAllPools = async (req, res) => {
   try {
-    const [pools, markets] = await Promise.all([
+    const [pools, markets, rewardMarkets] = await Promise.all([
       AlphaArcadePool.find({}).sort({ createdAt: -1 }),
       alphaArcadeService.getMarkets().catch(() => []),
+      alphaArcadeService.getRewardMarkets().catch(() => []),
     ]);
     const marketMap = new Map();
     for (const m of markets) {
       marketMap.set(m.marketAppId, m);
+    }
+    const rewardMarketMap = new Map();
+    for (const rm of rewardMarkets) {
+      rewardMarketMap.set(rm.marketAppId, rm);
     }
 
     // Fetch liquidity data for each pool in parallel (Redis-cached, 5-min TTL)
@@ -159,7 +185,11 @@ const getAllPools = async (req, res) => {
 
     const poolsWithApr = pools.map(p => {
       const obj = p.toObject();
-      obj.aprEstimate = computeEstimatedApr(p, marketMap.get(p.marketAppId), liquidityMap.get(p.marketAppId));
+      const rewardData = rewardMarketMap.get(p.marketAppId) || null;
+      const apr = computeApr(p, marketMap.get(p.marketAppId), liquidityMap.get(p.marketAppId), rewardData);
+      obj.aprDisplay = apr.aprDisplay;
+      obj.aprMeta = apr.aprMeta;
+      obj.isRewardMarket = apr.aprDisplay.isRewardMarket;
       return obj;
     });
     res.status(200).json({
@@ -190,13 +220,20 @@ const getPoolById = async (req, res) => {
         message: `Pool ${poolId} not found.`,
       });
     }
-    const market = await alphaArcadeService.getMarket(pool.marketAppId).catch(() => null);
+    const [market, rewardMarkets] = await Promise.all([
+      alphaArcadeService.getMarket(pool.marketAppId).catch(() => null),
+      alphaArcadeService.getRewardMarkets().catch(() => []),
+    ]);
+    const rewardData = rewardMarkets.find(rm => rm.marketAppId === pool.marketAppId) || null;
     const depth = await alphaArcadeService.getOrderbookDepth(pool.marketAppId);
     const liquidityData = depth.totalDepthUsdc > 0
       ? depth
       : await alphaArcadeService.getMarketTokenSupply(pool.marketAppId);
     const poolObj = pool.toObject();
-    poolObj.aprEstimate = computeEstimatedApr(pool, market, liquidityData);
+    const apr = computeApr(pool, market, liquidityData, rewardData);
+    poolObj.aprDisplay = apr.aprDisplay;
+    poolObj.aprMeta = apr.aprMeta;
+    poolObj.isRewardMarket = apr.aprDisplay.isRewardMarket;
     res.status(200).json({
       success: true,
       message: "Pool fetched successfully.",

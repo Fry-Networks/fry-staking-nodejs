@@ -4,10 +4,12 @@ const { getAlgodClient } = require('./algodService');
 const { getMarketGlobalState } = require('@alpha-arcade/sdk');
 
 /**
- * Sync a single Alpha Arcade pool's on-chain global state to MongoDB.
+ * Sync a single Alpha Arcade pool's on-chain global state + reward data to MongoDB.
+ * @param {Object} pool - Pool document from MongoDB
+ * @param {Object|null} rewardMarketData - Reward market data from API (null if not a reward market)
  * Returns { updated: boolean, inSync?: boolean, error?: string }
  */
-async function syncAlphaArcadePool(pool) {
+async function syncAlphaArcadePool(pool, rewardMarketData) {
   const appId = Number(pool.marketAppId);
 
   if (!appId || isNaN(appId)) {
@@ -27,7 +29,13 @@ async function syncAlphaArcadePool(pool) {
     const resolvedDiffers = onChainResolved !== (pool.isResolved || false);
     const outcomeDiffers = onChainOutcome !== (pool.resolutionOutcome || null);
 
-    if (!resolvedDiffers && !outcomeDiffers) {
+    // Check if reward data changed
+    const isRewardMarket = !!(rewardMarketData?.rewardsSpreadDistance > 0);
+    const rewardDiffers = isRewardMarket !== (pool.isRewardMarket || false)
+      || (rewardMarketData?.lastRewardAmount || 0) !== (pool.rewardData?.lastRewardAmount || 0)
+      || (rewardMarketData?.lastRewardTs || 0) !== (pool.rewardData?.lastRewardTs || 0);
+
+    if (!resolvedDiffers && !outcomeDiffers && !rewardDiffers) {
       await AlphaArcadePool.updateOne(
         { _id: pool._id },
         { $set: { lastOnChainSync: new Date() } }
@@ -43,12 +51,26 @@ async function syncAlphaArcadePool(pool) {
       update.isActive = false;
     }
 
+    // Sync reward data
+    update.isRewardMarket = isRewardMarket;
+    if (rewardMarketData) {
+      update.rewardData = {
+        spreadDistance: rewardMarketData.rewardsSpreadDistance || 0,
+        fees: rewardMarketData.fees || 0,
+        lastRewardAmount: rewardMarketData.lastRewardAmount || 0,
+        lastRewardTs: rewardMarketData.lastRewardTs || 0,
+        minContracts: rewardMarketData.rewardsMinContracts || 0,
+        lpCount: rewardMarketData.lpRewardCompetitionWalletCount || 0,
+      };
+    }
+
     await AlphaArcadePool.updateOne({ _id: pool._id }, { $set: update });
 
     logger.info(
       `Alpha Arcade sync: ${appId} — ` +
       `isResolved: ${pool.isResolved} -> ${onChainResolved}, ` +
-      `outcome: ${pool.resolutionOutcome || 'null'} -> ${onChainOutcome || 'null'}`
+      `outcome: ${pool.resolutionOutcome || 'null'} -> ${onChainOutcome || 'null'}, ` +
+      `isRewardMarket: ${pool.isRewardMarket || false} -> ${isRewardMarket}`
     );
 
     return { updated: true };
@@ -59,18 +81,32 @@ async function syncAlphaArcadePool(pool) {
 }
 
 /**
- * Sync all active/unresolved Alpha Arcade pools from on-chain state.
- * Processes sequentially with a small delay to avoid algod rate limiting.
+ * Sync all active/unresolved Alpha Arcade pools from on-chain state + reward data.
+ * Fetches reward markets ONCE, then processes pools sequentially with a small delay.
  */
 async function syncAllAlphaArcadePools() {
   const pools = await AlphaArcadePool.find({
     $or: [{ isActive: true }, { isResolved: false }],
   }).lean();
 
+  // Fetch reward markets once for the entire sync cycle
+  let rewardMarketMap = new Map();
+  try {
+    const { getRewardMarkets } = require('./alphaArcadeService');
+    const rewardMarkets = await getRewardMarkets();
+    for (const rm of rewardMarkets) {
+      rewardMarketMap.set(rm.marketAppId, rm);
+    }
+    logger.info(`Alpha Arcade sync: loaded ${rewardMarketMap.size} reward markets`);
+  } catch (err) {
+    logger.warn(`Alpha Arcade sync: failed to fetch reward markets: ${err.message}`);
+  }
+
   const stats = { total: pools.length, synced: 0, skipped: 0, errors: 0 };
 
   for (let i = 0; i < pools.length; i++) {
-    const result = await syncAlphaArcadePool(pools[i]);
+    const rewardData = rewardMarketMap.get(pools[i].marketAppId) || null;
+    const result = await syncAlphaArcadePool(pools[i], rewardData);
     if (result.error) {
       stats.errors++;
     } else if (result.updated) {
