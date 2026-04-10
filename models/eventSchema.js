@@ -119,6 +119,17 @@ const eventSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+
+  // Vesting configuration for event rewards
+  vesting: {
+    enabled: { type: Boolean, default: false },
+    startDate: { type: Date },
+    durationDays: { type: Number },
+    cliffDays: { type: Number, default: 0 },
+    model: { type: String, enum: ['linear', 'cliff-linear'], default: 'linear' },
+    rewardAsaId: { type: Number },
+    totalPool: { type: Number },  // microFRY
+  },
 }, { timestamps: true });
 
 eventSchema.index({ status: 1, startDate: 1, endDate: 1 });

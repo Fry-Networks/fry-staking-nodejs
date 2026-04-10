@@ -39,6 +39,13 @@ const eventPointsSchema = new mongoose.Schema({
     type: String,
     enum: ['pending', 'sent', 'failed'],
   },
+
+  // Vesting fields
+  vestingAllocation: { type: Number, default: 0 },     // total microFRY allocated, immutable once set
+  vestingClaimed: { type: Number, default: 0 },        // running total microFRY claimed
+  vestingLastClaimAt: { type: Date },                  // timestamp of last successful claim
+  vestingLastClaimTxId: { type: String },              // Algorand txID of last claim
+  vestingClaimCount: { type: Number, default: 0 },     // number of successful claims
 }, { timestamps: true });
 
 eventPointsSchema.index({ eventId: 1, wallet: 1 }, { unique: true });
