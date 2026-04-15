@@ -129,6 +129,8 @@ const eventSchema = new mongoose.Schema({
     model: { type: String, enum: ['linear', 'cliff-linear'], default: 'linear' },
     rewardAsaId: { type: Number },
     totalPool: { type: Number },  // microFRY
+    vestingType: { type: String, enum: ['off-chain', 'on-chain'], default: 'off-chain' },
+    appId: { type: Number },  // Algorand app ID for on-chain EventVesting contract
   },
 }, { timestamps: true });
 

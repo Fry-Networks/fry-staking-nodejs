@@ -157,6 +157,8 @@ function getVestingStatus({ event, eventPoints }) {
     nextUnlockAmount,
     isFullyVested: vc.isFullyVested,
     rewardAsaId: event.vesting.rewardAsaId || FRY_ASA_ID,
+    vestingType: event.vesting.vestingType || 'off-chain',
+    appId: event.vesting.appId || null,
     claimCount: eventPoints.vestingClaimCount || 0,
     lastClaimAt: eventPoints.vestingLastClaimAt || null,
     lastClaimTxId: eventPoints.vestingLastClaimTxId || null,

@@ -139,6 +139,7 @@ const createEvent = async (req, res) => {
     };
     if (startDate) eventData.startDate = new Date(startDate);
     if (endDate) eventData.endDate = new Date(endDate);
+    if (req.body.vesting) eventData.vesting = req.body.vesting;
 
     const event = await Event.create(eventData);
     res.status(201).json({ success: true, message: "Event created", data: event });
