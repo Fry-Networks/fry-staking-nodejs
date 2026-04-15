@@ -503,6 +503,17 @@ const communityEventCreateSchema = Joi.object({
     pointsMultiplier: Joi.number().default(1),
     config: Joi.object().default({}),
   })).min(1).required(),
+  vesting: Joi.object({
+    enabled: Joi.boolean(),
+    startDate: Joi.string().isoDate(),
+    durationDays: Joi.number().integer().min(1),
+    cliffDays: Joi.number().integer().min(0),
+    model: Joi.string().valid('linear', 'cliff-linear'),
+    rewardAsaId: Joi.number().integer(),
+    totalPool: Joi.number(),
+    vestingType: Joi.string().valid('off-chain', 'on-chain'),
+    appId: Joi.number().integer(),
+  }).optional(),
 });
 
 // Community event update schema
@@ -518,6 +529,17 @@ const communityEventUpdateSchema = Joi.object({
     rewardAmount: Joi.number().required(),
   })),
   minPointsToQualify: Joi.number().min(0),
+  vesting: Joi.object({
+    enabled: Joi.boolean(),
+    startDate: Joi.string().isoDate(),
+    durationDays: Joi.number().integer().min(1),
+    cliffDays: Joi.number().integer().min(0),
+    model: Joi.string().valid('linear', 'cliff-linear'),
+    rewardAsaId: Joi.number().integer(),
+    totalPool: Joi.number(),
+    vestingType: Joi.string().valid('off-chain', 'on-chain'),
+    appId: Joi.number().integer(),
+  }).optional(),
 }).min(1);
 
 // Community event confirm funding schema

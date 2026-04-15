@@ -121,6 +121,7 @@ const createCommunityEvent = async (req, res) => {
       bannerImage: bannerImage || '',
       fundingStatus: 'unfunded',
       fundingFeeAmount: feeAmount,
+      ...(req.body.vesting ? { vesting: req.body.vesting } : {}),
     });
 
     // Create challenges
@@ -272,6 +273,7 @@ const updateCommunityEvent = async (req, res) => {
     if (airdropDistribution !== undefined) updates.airdropDistribution = airdropDistribution;
     if (airdropTiers !== undefined) updates.airdropTiers = airdropTiers;
     if (minPointsToQualify !== undefined) updates.minPointsToQualify = minPointsToQualify;
+    if (req.body.vesting !== undefined) updates.vesting = req.body.vesting;
 
     // Validate dates if either changed
     const sd = updates.startDate || event.startDate;
