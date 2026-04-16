@@ -137,6 +137,8 @@ const eventSchema = new mongoose.Schema({
       iv: { type: String },
       authTag: { type: String },
     },
+    seedingStatus: { type: String, enum: ["pending", "seeding", "seeded", "finalized", "failed"], default: "pending" },
+    seedingError: { type: String },
   },
 }, { timestamps: true });
 

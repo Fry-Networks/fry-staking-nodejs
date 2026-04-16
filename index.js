@@ -182,6 +182,7 @@ require('./crons/deviceVerificationCron');
 require('./crons/poolSyncCron');
 require('./crons/bugReportCleanup');
 require('./crons/voiPriceSamplerCron');
+require('./crons/vestingSeedingCron');
 
 // Start the server
 const PORT = process.env.PORT || 5000;
