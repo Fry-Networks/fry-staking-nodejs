@@ -1,4 +1,5 @@
 const logger = require("../config/logger");
+const { generateEventCaller, encryptSecretKey } = require('../services/eventCallerCrypto');
 const Event = require("../models/eventSchema");
 const Challenge = require("../models/challengeSchema");
 const EventPoints = require("../models/eventPointsSchema");
@@ -142,6 +143,16 @@ const createEvent = async (req, res) => {
     if (req.body.vesting) eventData.vesting = req.body.vesting;
 
     const event = await Event.create(eventData);
+
+    // Generate per-event caller keypair for on-chain vesting
+    if (event.vesting?.vestingType === 'on-chain' && process.env.EVENT_CALLER_MASTER_KEY) {
+      const caller = generateEventCaller();
+      const encrypted = encryptSecretKey(caller.secretKey, process.env.EVENT_CALLER_MASTER_KEY);
+      event.vesting.eventCallerAddress = caller.address;
+      event.vesting.eventCallerKey = encrypted;
+      await event.save();
+    }
+
     res.status(201).json({ success: true, message: "Event created", data: event });
   } catch (error) {
     logger.error("Error creating event:", error);

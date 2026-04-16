@@ -131,6 +131,12 @@ const eventSchema = new mongoose.Schema({
     totalPool: { type: Number },  // microFRY
     vestingType: { type: String, enum: ['off-chain', 'on-chain'], default: 'off-chain' },
     appId: { type: Number },  // Algorand app ID for on-chain EventVesting contract
+    eventCallerAddress: { type: String },  // Per-event Algorand account for seeding
+    eventCallerKey: {
+      ciphertext: { type: String },
+      iv: { type: String },
+      authTag: { type: String },
+    },
   },
 }, { timestamps: true });
 

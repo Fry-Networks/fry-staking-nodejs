@@ -1,3 +1,4 @@
+const { generateEventCaller, encryptSecretKey } = require('../services/eventCallerCrypto');
 const logger = require("../config/logger");
 const Event = require("../models/eventSchema");
 const Challenge = require("../models/challengeSchema");
@@ -136,6 +137,16 @@ const createCommunityEvent = async (req, res) => {
           config: ch.config || {},
         });
       }
+    }
+
+    
+    // Generate per-event caller keypair for on-chain vesting
+    if (event.vesting?.vestingType === 'on-chain' && process.env.EVENT_CALLER_MASTER_KEY) {
+      const caller = generateEventCaller();
+      const encrypted = encryptSecretKey(caller.secretKey, process.env.EVENT_CALLER_MASTER_KEY);
+      event.vesting.eventCallerAddress = caller.address;
+      event.vesting.eventCallerKey = encrypted;
+      await event.save();
     }
 
     res.status(201).json({
