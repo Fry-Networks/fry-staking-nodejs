@@ -2,6 +2,7 @@ const StakingFarmingToken = require("../models/stakingFarmingTokenSchema");
 const withdrawFarmingToken = require("../models/withdrawFarmingTokenSchema");
 const claimFarmRewards = require("../models/claimFarmRewardsSchema");
 const Farming = require("../models/farmingSchema"); // Import your farming schema
+const { syncWalletFarmPositions } = require('../services/farmPositionSyncService');
 
 // Create a new staking farming token entry (user staking in pool)
 const addStakingFarmingToken = async (req, res) => {
@@ -246,7 +247,16 @@ const getStakingFarmingTokensByWallet = async (req, res) => {
   try {
     const { wallet } = req.params;
     const chainId = req.chainId || 'algorand-mainnet';
-    const records = await StakingFarmingToken.find({ wallet, chainId });
+    let records = await StakingFarmingToken.find({ wallet, chainId });
+
+    // Self-healing sync: verify on-chain positions and backfill missing DB records
+    try {
+      await syncWalletFarmPositions(wallet, chainId);
+      records = await StakingFarmingToken.find({ wallet, chainId });
+    } catch (syncErr) {
+      console.warn(`[getStakingFarmingTokensByWallet] sync skipped for ${wallet}: ${syncErr.message}`);
+    }
+
     res.status(200).json({ success: true, data: records });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
