@@ -50,8 +50,15 @@ const proxyFolksQuote = async (req, res) => {
   const cacheKey = getCacheKey('folks', req.query);
   try {
     const { data, fromCache, rateLimited } = await getCachedOrFetch(cacheKey, CACHE_TTL, async () => {
+      const folksParams = {
+        fromAsset: req.query.from_asa,
+        toAsset: req.query.to_asa,
+        amount: req.query.amount,
+        type: 'FIXED_INPUT',
+        network: 'mainnet',
+      };
       const resp = await axios.get(`${FOLKS_BASE}/fetch/quote`, {
-        params: req.query,
+        params: folksParams,
         timeout: REQUEST_TIMEOUT,
       });
       return resp.data;

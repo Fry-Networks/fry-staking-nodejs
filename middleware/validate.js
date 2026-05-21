@@ -594,6 +594,11 @@ const p2pOfferCancelSchema = Joi.object({
   cancelTxId: Joi.string().required(),
 });
 
+// Vault claim schema (capped-hybrid rewards)
+const vaultClaimSchema = Joi.object({
+  fingerprint: Joi.string().required(),
+  turnstileToken: Joi.string().optional(),
+});
 module.exports = {
   validate,
   stakingSchema,
@@ -633,4 +638,5 @@ module.exports = {
   p2pOfferCreateSchema,
   p2pOfferAcceptSchema,
   p2pOfferCancelSchema,
+  vaultClaimSchema,
 };
