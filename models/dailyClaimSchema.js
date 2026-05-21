@@ -19,6 +19,11 @@ const dailyClaimSchema = new mongoose.Schema({
   trustScore: { type: Number, default: 0 },
   trustTier: { type: Number, default: 0 },
   onChainScore: { type: Number, default: 0 },
+  // Capped-hybrid fields (populated only when rewardMode='capped-hybrid')
+  grossReward: { type: Number, default: 0 },
+  liquidReward: { type: Number, default: 0 },
+  vaultReward: { type: Number, default: 0 },
+  rewardMode: { type: String, enum: ['streak', 'capped-hybrid'], default: 'streak' },
 }, { timestamps: true });
 
 // Compound index prevents double-claims
