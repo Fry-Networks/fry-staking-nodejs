@@ -18,6 +18,7 @@ const requireAuth = (req, res, next) => {
   }
 
   if (!token) {
+    logger.warn(`Auth missing: ${req.method} ${req.path} — cookie=${!!req.cookies?.fry_token}, authHeader=${!!req.headers.authorization}`);
     return res.status(401).json({ success: false, message: 'Authentication required' });
   }
 
@@ -27,7 +28,7 @@ const requireAuth = (req, res, next) => {
     next();
   } catch (err) {
     // Clear stale cookie
-    res.clearCookie('fry_token', { path: '/' });
+    res.clearCookie('fry_token', { domain: 'fry.farm', path: '/' });
     return res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
 };

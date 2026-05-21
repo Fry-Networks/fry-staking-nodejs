@@ -37,6 +37,16 @@ const rewardsConfigSchema = new mongoose.Schema({
   adminWallets: { type: [String], default: [] },
   fryAsaId: { type: Number, default: 2485314946 },
   indexerUrl: { type: String, default: 'https://mainnet-idx.4160.nodely.dev' },
+  // Capped-hybrid reward model
+  cappedHybridEnabled: { type: Boolean, default: false },
+  dailyGlobalBudget: { type: Number, default: 5000 },
+  maxGrossPerUser: { type: Number, default: 25 },
+  liquidBps: { type: Number, default: 2000 },
+  vaultBps: { type: Number, default: 8000 },
+  weeklyUnlockRequiredDays: { type: Number, default: 5 },
+  minStakedForVault: { type: Number, default: 1000 },
+  requireMinStakeForVault: { type: Boolean, default: false },
+  vaultWeekStartDay: { type: Number, default: 5 },
 }, { timestamps: true });
 
 rewardsConfigSchema.statics.getConfig = async function () {

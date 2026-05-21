@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, requireRewardsAdmin } = require('../middleware/auth');
 const { algorandOnly } = require('../middleware/chainMiddleware');
-const { validate, dailyRewardClaimSchema, rewardsConfigUpdateSchema, adminBanSchema } = require('../middleware/validate');
+const { validate, dailyRewardClaimSchema, rewardsConfigUpdateSchema, adminBanSchema, vaultClaimSchema } = require('../middleware/validate');
 const {
   getRewardsStatus,
   claimReward,
@@ -13,6 +13,9 @@ const {
   adminResume,
   adminBanWallet,
   adminUnbanWallet,
+  getVaultStatus,
+  claimVault,
+  getDailyBudgetStatus,
 } = require('../controllers/rewardsController');
 
 // All reward routes are Algorand-only (FRY token)
@@ -23,6 +26,11 @@ router.get('/status', getRewardsStatus);
 router.get('/config', getRewardsConfig);
 router.get('/leaderboard', getLeaderboard);
 router.post('/claim', requireAuth, validate(dailyRewardClaimSchema), claimReward);
+
+// Capped-hybrid routes
+router.get('/vault-status', getVaultStatus);
+router.post('/vault-claim', requireAuth, validate(vaultClaimSchema), claimVault);
+router.get('/daily-budget', getDailyBudgetStatus);
 
 // Admin routes
 router.put('/config', requireAuth, requireRewardsAdmin, validate(rewardsConfigUpdateSchema), updateRewardsConfig);

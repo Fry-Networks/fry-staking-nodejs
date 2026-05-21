@@ -103,14 +103,15 @@ router.post('/verify', authLimiter, async (req, res) => {
     const groupFailure = simResult.txnGroups[0].failureMessage;
 
     if (groupFailure) {
-      return res.status(401).json({ success: false, message: 'Transaction verification failed' });
+      console.warn("[auth/verify] simulate failed", { wallet: wallet ? `${wallet.slice(0,6)}...${wallet.slice(-6)}` : undefined, groupFailure }); return res.status(401).json({ success: false, message: 'Transaction verification failed' });
     }
 
     const token = jwt.sign({ wallet }, JWT_SECRET, { algorithm: 'HS256', expiresIn: '24h' });
     res.cookie('fry_token', token, {
       httpOnly: true,
       secure: true,
-      sameSite: 'strict',
+      sameSite: 'lax',
+      domain: 'fry.farm',
       maxAge: 24 * 60 * 60 * 1000,
       path: '/',
     });
@@ -126,7 +127,7 @@ router.post('/verify', authLimiter, async (req, res) => {
  * Clears the auth cookie.
  */
 router.post('/logout', (req, res) => {
-  res.clearCookie('fry_token', { path: '/' });
+  res.clearCookie('fry_token', { domain: 'fry.farm', path: '/' });
   return res.json({ success: true });
 });
 
@@ -144,7 +145,7 @@ router.get('/me', async (req, res) => {
     const isAdmin = await checkIsAdmin(decoded.wallet);
     return res.json({ success: true, authenticated: true, wallet: decoded.wallet, isAdmin });
   } catch (_err) {
-    res.clearCookie('fry_token', { path: '/' });
+    res.clearCookie('fry_token', { domain: 'fry.farm', path: '/' });
     return res.json({ success: true, authenticated: false });
   }
 });

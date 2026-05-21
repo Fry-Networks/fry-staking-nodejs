@@ -45,3 +45,6 @@ yarn-error.log*
 
 .vercel
 .netlify
+
+# Backup files — never commit
+*.bak.*
