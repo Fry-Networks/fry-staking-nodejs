@@ -668,7 +668,19 @@ const getStats = async (req, res) => {
         uniqueWallets: { $addToSet: '$wallet' },
       }},
     ]);
-    const activePools = await AlphaArcadePool.countDocuments({ isActive: true });
+
+    // Cross-check DB active pools against live market data so stats never
+    // claim active pools when the authoritative upstream has none.
+    const activePoolsDb = await AlphaArcadePool.find({ isActive: true }).select('marketAppId').lean();
+    let liveMarkets = [];
+    try {
+      liveMarkets = await alphaArcadeService.getMarkets();
+    } catch (e) {
+      logger.warn('Alpha Arcade getStats: live market fetch failed, falling back to empty set:', e.message);
+    }
+    const liveMarketAppIds = new Set((liveMarkets || []).map(m => Number(m.marketAppId || m.id)));
+    const activePools = activePoolsDb.filter(p => liveMarketAppIds.has(Number(p.marketAppId))).length;
+
     const stats = positionStats[0] || { totalUsdcDeposited: 0, totalPositions: 0, uniqueWallets: [] };
     res.json({
       success: true,
