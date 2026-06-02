@@ -1,6 +1,7 @@
 const logger = require("../config/logger");
 const GasFee = require("../models/gasFeeSchema");
 const { getIndexerUrl } = require("./algodService");
+const { getChainConfig } = require("../config/chains");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -91,8 +92,13 @@ async function verifyFeeTransaction(txId, { senderWallet, feeRecipient, assetId,
     amount = axfer.amount;
   }
 
-  // 5. Receiver must be fee recipient
-  if (receiver !== feeRecipient) {
+  // 5. Receiver must be fee recipient (treasury direct) or FeeRouter (routed)
+  const chainCfg = getChainConfig(chainId);
+  const validReceivers = [feeRecipient];
+  if (chainCfg.feeRouterAddr) {
+    validReceivers.push(chainCfg.feeRouterAddr);
+  }
+  if (!validReceivers.includes(receiver)) {
     return { verified: false, error: "Wrong receiver" };
   }
 

@@ -27,6 +27,7 @@ const chains = {
     indexerRetry: { maxAttempts: 3, delayMs: 3000 },
     explorerBaseUrl: 'https://explorer.perawallet.app',
     p2pMarkets: [{ appId: 3494825276, name: 'FRY/ALGO' }],
+    feeRouterAddr: 'AM53XSHRSSSZMNFAMKVAJFXHPMIYYUUBOVCODJ2LQY3D27CVXAHAPIXYXQ',
     features: {
       staking: true,
       farming: true,
@@ -54,6 +55,8 @@ const chains = {
     fryTokenId: 48968653,  // vFRY ASA on Voi
     usdcId: null,
     feeRecipient: 'NQA76E235VCMZB4KZQSV6IU64IWF2GGCXK4Y3QA7N7ZMI7MVHUQVV5BUD4',
+    feeRouterAppId: 49316563,
+    feeRouterAddr: 'QNY6X745DRD5QXORZ2E36VDKFNW3IXUGVQ5VNL3V653LP2GQE3PI2P3OPA',
     indexerRetry: { maxAttempts: 6, delayMs: 5000 },
     explorerBaseUrl: 'https://explorer.voi.network',
     p2pMarkets: [{ appId: 48999768, name: 'FRY/VOI' }],
@@ -64,7 +67,7 @@ const chains = {
       deviceStaking: false,
       swap: false,
       predictionLp: false,
-      communityEvents: false,
+      communityEvents: true,
       p2pSwap: true,
     },
   },

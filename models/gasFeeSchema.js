@@ -49,6 +49,15 @@ const gasFeeSchema = new mongoose.Schema(
     usdValue: {
       type: Number,
     },
+    distributed: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    distributionEpochId: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true, // Adds createdAt and updatedAt
