@@ -80,6 +80,10 @@ const stakingSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  rewardTokenAmountUsdc: {
+    type: Number,
+    default: 0,
+  },
   isGated: {
     type: Boolean,
     default: false,

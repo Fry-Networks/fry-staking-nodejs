@@ -83,6 +83,37 @@ async function readPoolGlobalState(appId, chainId = 'algorand-mainnet') {
     }
   }
 
+  // V4 (Haystack-style): uses 'staked' key, box storage for stakers
+  if (state.staked !== undefined && state.total_staked === undefined) {
+    let totalStakers = 0;
+    try {
+      const boxRes = await client.getApplicationBoxes(appId).do();
+      totalStakers = (boxRes.boxes || []).length;
+    } catch (e) {
+      logger.warn('V4 box count failed for app ' + appId + ': ' + e.message);
+    }
+
+    return {
+      totalStaked: state.staked || 0,
+      totalStakers,
+      rewardsDistributed: 0,
+      emaAPRHay: state.emaAPRHay || 0,
+      emaAPRUsdc: state.emaAPRUsdc || 0,
+      dripPerSecHay: state.dripPerSecHay || 0,
+      dripPerSecUsdc: state.dripPerSecUsdc || 0,
+      apr: 0,
+      rewardToken: 0,
+      rewardTokenAmount: state.lastRewardHay || 0,
+      rewardTokenAmountUsdc: state.lastRewardBalUsdc || 0,
+      lockPeriod: 0,
+      stakeEndTime: 0,
+      stakeStartTime: state.epochStartTs || 0,
+      poolTime: 0,
+      stakeToken: 0,
+      authority: undefined,
+    };
+  }
+
   return {
     apr: state.apr || 0,
     rewardToken: state.reward_token || 0,

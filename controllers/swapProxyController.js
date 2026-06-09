@@ -42,9 +42,32 @@ setInterval(() => {
   }
 }, 60000);
 
+// --- Folks quote helpers ---
+function getElapsedMs(start) {
+  return Date.now() - start;
+}
+
+function compactResponse(data) {
+  try {
+    const str = JSON.stringify(data);
+    return str.length > 500 ? str.slice(0, 500) + '...' : str;
+  } catch {
+    return '[unserializable]';
+  }
+}
+
+function isRetryable(err) {
+  if (!err) return false;
+  const code = err.code;
+  if (code === 'ETIMEDOUT' || code === 'ECONNRESET' || code === 'ECONNABORTED') return true;
+  const status = err.response?.status;
+  if (status === 502 || status === 503 || status === 504) return true;
+  return false;
+}
+
 /**
  * GET /swap/folks/quote
- * Proxies to FolksRouter quote endpoint
+ * Proxies to FolksRouter quote endpoint with bounded retry and structured logging.
  */
 const proxyFolksQuote = async (req, res) => {
   const cacheKey = getCacheKey('folks', req.query);
@@ -57,11 +80,50 @@ const proxyFolksQuote = async (req, res) => {
         type: 'FIXED_INPUT',
         network: 'mainnet',
       };
-      const resp = await axios.get(`${FOLKS_BASE}/fetch/quote`, {
-        params: folksParams,
-        timeout: REQUEST_TIMEOUT,
-      });
-      return resp.data;
+
+      const MAX_ATTEMPTS = 2;
+      let lastErr = null;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        const t0 = Date.now();
+        try {
+          const resp = await axios.get(`${FOLKS_BASE}/fetch/quote`, {
+            params: folksParams,
+            timeout: REQUEST_TIMEOUT,
+          });
+          return resp.data;
+        } catch (err) {
+          const elapsed = getElapsedMs(t0);
+          const upstreamStatus = err.response?.status || null;
+          const logPayload = {
+            route: 'GET /swap/folks/quote',
+            upstream_url: `${FOLKS_BASE}/fetch/quote`,
+            params: folksParams,
+            attempt,
+            max_attempts: MAX_ATTEMPTS,
+            elapsed_ms: elapsed,
+            err_code: err.code || null,
+            err_message: err.message,
+            upstream_status: upstreamStatus,
+            upstream_body: upstreamStatus ? compactResponse(err.response?.data) : null,
+          };
+
+          if (upstreamStatus === 429) {
+            logger.error('[FolksQuote] Upstream rate limited (429)', logPayload);
+            throw err;
+          }
+
+          if (attempt < MAX_ATTEMPTS && isRetryable(err)) {
+            logger.warn('[FolksQuote] Transient failure, will retry', logPayload);
+            lastErr = err;
+            await new Promise(r => setTimeout(r, 500));
+            continue;
+          }
+
+          logger.error('[FolksQuote] Final failure', logPayload);
+          throw err;
+        }
+      }
+      throw lastErr || new Error('FolksQuote: exhausted retries');
     });
     if (rateLimited) {
       res.set('X-Cache', 'HIT').status(429).json(data);
@@ -241,6 +303,48 @@ const proxyDeflexTransactions = async (req, res) => {
   }
 };
 
+/**
+ * GET /swap/haystack/quote
+ * Proxies to Haystack Router quote endpoint
+ */
+const proxyHaystackQuote = async (req, res) => {
+  try {
+    const { fromASAID, toASAID, amount, type } = req.query;
+    const resp = await axios.get('https://hayrouter.txnlab.dev/api/fetchQuote', {
+      params: {
+        fromASAID, toASAID, amount,
+        type: type || 'fixed-input',
+        referrerAddress: process.env.HAYSTACK_REFERRAL_ADDRESS || '',
+        feeBps: 10,
+        algodUri: 'https://mainnet-api.algonode.cloud',
+        apiKey: process.env.HAYSTACK_API_KEY || '',
+      },
+      timeout: 15000,
+    });
+    return res.json({ success: true, ...resp.data });
+  } catch (err) {
+    console.error('Haystack quote error:', err.message);
+    return res.status(502).json({ success: false, message: 'Haystack Router error: ' + err.message });
+  }
+};
+
+/**
+ * POST /swap/haystack/prepare
+ * Proxies to Haystack Router prepare endpoint
+ */
+const proxyHaystackPrepare = async (req, res) => {
+  try {
+    const { address, txnPayloadJSON, slippage } = req.body;
+    const resp = await axios.post('https://hayrouter.txnlab.dev/api/fetchExecuteSwapTxns', {
+      address, txnPayloadJSON, slippage: slippage || 0.01,
+    }, { timeout: 15000 });
+    return res.json({ success: true, ...resp.data });
+  } catch (err) {
+    console.error('Haystack prepare error:', err.message);
+    return res.status(502).json({ success: false, message: 'Haystack Router error: ' + err.message });
+  }
+};
+
 module.exports = {
   proxyFolksQuote,
   proxyFolksPrepare,
@@ -248,4 +352,6 @@ module.exports = {
   proxyVestigeTransactions,
   proxyDeflexQuote,
   proxyDeflexTransactions,
+  proxyHaystackQuote,
+  proxyHaystackPrepare,
 };

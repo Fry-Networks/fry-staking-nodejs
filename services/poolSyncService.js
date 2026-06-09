@@ -20,14 +20,22 @@ async function syncPool(pool) {
     // On-chain total_staked is in micro-units; MongoDB stores in standard units
     const onChainTotalStaked = onChain.totalStaked / 1_000_000;
     const onChainTotalStakers = onChain.totalStakers;
+    const onChainAprRate = (pool.contractVersion === 4) ? ((onChain.emaAPRHay || 0) + (onChain.emaAPRUsdc || 0)) / 1_000_000 : (onChain.apr || 0) / 100;
 
     const stakedDiffers = Math.abs((pool.totalAmountStaked || 0) - onChainTotalStaked) > 0.000001;
     const stakersDiffers = (pool.totalStakers || 0) !== onChainTotalStakers;
+    const aprDiffers = Math.abs((pool.aprRate || 0) - onChainAprRate) > 0.001;
 
-    if (!stakedDiffers && !stakersDiffers) {
+    if (!stakedDiffers && !stakersDiffers && !aprDiffers) {
+      const inSyncUpdate = { lastOnChainSync: new Date(), aprRate: onChainAprRate };
+      // V4: always persist reward reserve amounts
+      if (pool.contractVersion === 4) {
+        inSyncUpdate.rewardTokenAmount = onChain.rewardTokenAmount || 0;
+        inSyncUpdate.rewardTokenAmountUsdc = onChain.rewardTokenAmountUsdc || 0;
+      }
       await Staking.updateOne(
         { _id: pool._id },
-        { $set: { lastOnChainSync: new Date() } }
+        { $set: inSyncUpdate }
       );
       return { updated: false, inSync: true };
     }
@@ -35,11 +43,18 @@ async function syncPool(pool) {
     const update = {
       totalAmountStaked: onChainTotalStaked,
       totalStakers: onChainTotalStakers,
+      aprRate: onChainAprRate,
       lastOnChainSync: new Date(),
     };
 
     if (onChain.rewardsDistributed !== undefined) {
       update.rewardsDistributed = onChain.rewardsDistributed / 1_000_000;
+    }
+
+    // V4: persist reward reserve amounts from on-chain state
+    if (pool.contractVersion === 4) {
+      update.rewardTokenAmount = onChain.rewardTokenAmount || 0;
+      update.rewardTokenAmountUsdc = onChain.rewardTokenAmountUsdc || 0;
     }
 
     await Staking.updateOne({ _id: pool._id }, { $set: update });

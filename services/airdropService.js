@@ -3,16 +3,18 @@ const logger = require("../config/logger");
 const Event = require("../models/eventSchema");
 const EventPoints = require("../models/eventPointsSchema");
 const RewardsConfig = require("../models/rewardsConfigSchema");
-const { withFallback } = require("./algodService");
+const { withFallback, withFallbackForChain } = require("./algodService");
+const { getChainConfig } = require("../config/chains");
 
 const FRY_ASA_ID_DEFAULT = 2485314946;
 
-let treasuryAddr, signingKey;
+let treasuryAddr, ogSigningKey, rekeySigningKey;
 try {
   const ogAccount = algosdk.mnemonicToSecretKey(process.env.REWARD_MNEMONIC);
   const rekeyAccount = algosdk.mnemonicToSecretKey(process.env.REWARD_REKEY);
   treasuryAddr = ogAccount.addr;
-  signingKey = rekeyAccount.sk;
+  ogSigningKey = ogAccount.sk;
+  rekeySigningKey = rekeyAccount.sk;
 } catch (err) {
   logger.warn('Airdrop service: REWARD_MNEMONIC/REWARD_REKEY not configured:', err.message);
 }
@@ -21,6 +23,8 @@ async function distributeAirdrop(eventId) {
   const event = await Event.findById(eventId);
   if (!event) throw new Error('Event not found');
   if (event.status !== 'ended') throw new Error('Event must be ended before airdrop');
+
+  const eventChainId = event.chainId || 'algorand-mainnet';
 
   const isCommunity = event.eventType === 'community';
   let asaId, poolAmount, amountMultiplier;
@@ -39,12 +43,13 @@ async function distributeAirdrop(eventId) {
       return { distributed: 0, successful: 0, failed: 0 };
     }
     const config = await RewardsConfig.getConfig();
-    asaId = config.fryAsaId || FRY_ASA_ID_DEFAULT;
+    const chainCfg = getChainConfig(eventChainId);
+    asaId = config.fryAsaId || chainCfg.fryTokenId || FRY_ASA_ID_DEFAULT;
     poolAmount = event.airdropPoolFry;
     amountMultiplier = 1e6; // FRY whole units → microunits
   }
 
-  if (!treasuryAddr || !signingKey) {
+  if (!treasuryAddr || !ogSigningKey || !rekeySigningKey) {
     throw new Error('Treasury wallet not configured (REWARD_MNEMONIC/REWARD_REKEY missing)');
   }
 
@@ -89,6 +94,13 @@ async function distributeAirdrop(eventId) {
     }
   }
 
+  // Determine signing key for this chain (rekeyed vs original)
+  const signingKey = await withFallbackForChain(eventChainId, async (client) => {
+    const acctInfo = await client.accountInformation(treasuryAddr).do();
+    const authAddr = acctInfo['auth-addr'] || acctInfo.address;
+    return (authAddr !== treasuryAddr) ? rekeySigningKey : ogSigningKey;
+  });
+
   let successful = 0;
   let failed = 0;
 
@@ -99,7 +111,7 @@ async function distributeAirdrop(eventId) {
     if (onChainAmount <= 0) continue;
 
     try {
-      const { txId } = await withFallback(async (client) => {
+      const { txId } = await withFallbackForChain(eventChainId, async (client) => {
         const params = await client.getTransactionParams().do();
         const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
           sender: treasuryAddr,

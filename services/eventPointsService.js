@@ -14,6 +14,7 @@ const AlphaArcadePosition = require("../models/alphaArcadePositionSchema");
 const Staking = require("../models/stakingSchema");
 const Farming = require("../models/farmingSchema");
 const { getAsaUsdPrice } = require("./priceService");
+const { getIndexerUrl } = require("./algodService");
 
 async function buildPoolTokenMap() {
   const map = {};
@@ -290,6 +291,53 @@ async function calcPredictionLpVolume(challenge, event) {
   return walletPoints;
 }
 
+const GENESIS_NFT_APP_ID = 3509410324;
+const MINT_SELECTOR = (() => {
+  const crypto = require('crypto');
+  return crypto.createHash('sha512-256').update('mint(axfer)uint64').digest().slice(0, 4);
+})();
+const MAX_INDEXER_PAGES = 20;
+
+async function calcGenesisNftMinting(challenge, event) {
+  const indexerUrl = getIndexerUrl('algorand-mainnet');
+  const walletPoints = {};
+  let nextToken = '';
+  let pageCount = 0;
+
+  try {
+    do {
+      let url = `${indexerUrl}/v2/transactions?application-id=${GENESIS_NFT_APP_ID}&tx-type=appl`
+        + `&after-time=${event.startDate.toISOString()}&before-time=${event.endDate.toISOString()}&limit=500`;
+      if (nextToken) url += `&next=${encodeURIComponent(nextToken)}`;
+
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Indexer ${res.status}: ${await res.text().catch(() => '')}`);
+      const data = await res.json();
+
+      for (const txn of (data.transactions || [])) {
+        const appArgs = txn['application-transaction']?.['application-args'] || [];
+        if (appArgs.length === 0) continue;
+        const firstArg = Buffer.from(appArgs[0], 'base64');
+        if (firstArg.length >= 4 && firstArg.slice(0, 4).equals(MINT_SELECTOR)) {
+          walletPoints[txn.sender] = (walletPoints[txn.sender] || 0) + 1 * challenge.pointsMultiplier;
+        }
+      }
+
+      nextToken = data['next-token'] || '';
+      pageCount++;
+      if (pageCount >= MAX_INDEXER_PAGES) {
+        logger.warn(`calcGenesisNftMinting: hit pagination cap (${MAX_INDEXER_PAGES} pages, ~${pageCount * 500} txns). Some mints may be uncounted.`);
+        break;
+      }
+    } while (nextToken);
+  } catch (err) {
+    logger.error('calcGenesisNftMinting: indexer query failed:', err.message);
+  }
+
+  logger.info(`calcGenesisNftMinting: found ${Object.keys(walletPoints).length} minters`);
+  return walletPoints;
+}
+
 const CALCULATORS = {
   staking_volume: (c, e, m) => calcStakingVolume(c, e, m),
   farming_volume: (c, e, m) => calcFarmingVolume(c, e, m),
@@ -300,6 +348,7 @@ const CALCULATORS = {
   hold_duration: (c, e) => calcHoldDuration(c, e),
   nft_staking_volume: (c, e) => calcNftStakingVolume(c, e),
   prediction_lp_volume: (c, e) => calcPredictionLpVolume(c, e),
+  genesis_nft_minting: (c, e) => calcGenesisNftMinting(c, e),
 };
 
 async function calculatePointsForEvent(eventId) {

@@ -6,7 +6,7 @@ const EventPoints = require("../models/eventPointsSchema");
 const FeeConfig = require("../models/feeConfigSchema");
 const GasFee = require("../models/gasFeeSchema");
 const { buildFundingTxns, buildRefundTxn } = require("../services/communityEventService");
-const { getAlgodClient } = require("../services/algodService");
+const { getAlgodClientForChain } = require("../services/algodService");
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
@@ -80,13 +80,14 @@ const createCommunityEvent = async (req, res) => {
       return res.status(400).json({ success: false, message: "startDate must be before endDate" });
     }
 
-    // Validate reward ASA exists on-chain
-    const algodClient = getAlgodClient();
+    // Validate reward ASA exists on-chain (chain-aware)
+    const chain = req.chainId || 'algorand-mainnet';
+    const algodClient = getAlgodClientForChain(chain);
     let asaInfo;
     try {
       asaInfo = await algodClient.getAssetByID(rewardAsaId).do();
     } catch (err) {
-      return res.status(400).json({ success: false, message: `ASA ${rewardAsaId} not found on Algorand` });
+      return res.status(400).json({ success: false, message: `ASA ${rewardAsaId} not found on ${req.chainConfig?.displayName || chain}` });
     }
 
     const asaName = asaInfo.params?.name || `ASA #${rewardAsaId}`;
@@ -108,6 +109,7 @@ const createCommunityEvent = async (req, res) => {
       description: description || '',
       status: 'draft',
       eventType: 'community',
+      chainId: chain,
       creatorWallet: wallet,
       createdBy: wallet,
       startDate: start,

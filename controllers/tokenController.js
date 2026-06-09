@@ -176,7 +176,82 @@ const searchTokenByName = async (req, res) => {
   }
 };
 
+// --- On-demand ASA image resolution (added for HAY pool fix) ---
+const getTokenImage = async (req, res) => {
+  const asaId = Number(req.params.asaId);
+  if (isNaN(asaId) || asaId < 0) {
+    return res.status(400).json({ success: false, message: "Invalid ASA ID" });
+  }
+
+  try {
+    // 1. Check DB first
+    const existing = await Token.findOne({ tokenId: asaId });
+    if (existing && existing.tokenImage && existing.tokenImage.startsWith("http")) {
+      return res.json({ success: true, imageUrl: existing.tokenImage });
+    }
+
+    let imageUrl = null;
+    let tokenName = null;
+    let tokenSymbol = null;
+
+    // 2a. Pera API (5s timeout)
+    try {
+      const axios = require("axios");
+      const peraResp = await axios.get(
+        `https://mainnet.api.perawallet.app/v1/assets/${asaId}/`,
+        { timeout: 5000 }
+      );
+      const logo = peraResp.data?.logo;
+      if (logo && typeof logo === "string" && logo.startsWith("http")) {
+        imageUrl = logo;
+        tokenName = peraResp.data?.name || null;
+        tokenSymbol = peraResp.data?.unit_name || null;
+      }
+    } catch { /* Pera failed, continue */ }
+
+    // 2b. Tinyman — GET with arraybuffer, check content-type (5s timeout)
+    if (!imageUrl) {
+      try {
+        const axios = require("axios");
+        const tinyUrl = `https://asa-list.tinyman.org/assets/${asaId}/icon.png`;
+        const tinyResp = await axios.get(tinyUrl, {
+          timeout: 5000,
+          responseType: "arraybuffer",
+          maxContentLength: 100000,
+        });
+        const ct = (tinyResp.headers["content-type"] || "").toLowerCase();
+        if (ct.startsWith("image/")) {
+          imageUrl = tinyUrl;
+        }
+      } catch { /* Tinyman failed, continue */ }
+    }
+
+    // 3. Cache if found (upsert to tokens collection)
+    if (imageUrl) {
+      const upsertData = {
+        tokenId: asaId,
+        tokenImage: imageUrl,
+        tokenName: tokenName || `Asset ${asaId}`,
+        tokenSymbol: tokenSymbol || `ASA${asaId}`,
+        lastUpdated: new Date(),
+      };
+      await Token.findOneAndUpdate(
+        { tokenId: asaId },
+        { $set: upsertData, $setOnInsert: { chainId: "algorand-mainnet" } },
+        { upsert: true, new: true }
+      );
+    }
+
+    // 4. Return (null means no image found — let frontend show fallback)
+    return res.json({ success: true, imageUrl: imageUrl });
+  } catch (error) {
+    logger.error(`Error resolving token image for ASA ${asaId}:`, error);
+    return res.status(500).json({ success: false, message: "Failed to resolve token image" });
+  }
+};
+
 module.exports = {
+    getTokenImage,
     getAllTokens,
     addToken,
     updateToken,

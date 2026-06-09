@@ -11,15 +11,16 @@
 
 const algosdk = require('algosdk');
 const logger = require('../config/logger');
-const { withFallback } = require('./algodService');
+const { withFallback, withFallbackForChain } = require('./algodService');
 
 // Rekey signing setup — copied from rewardsController.js:14-22
-let ogAccount, rekeyAccount, treasuryAddr, signingKey;
+let ogAccount, rekeyAccount, treasuryAddr, ogSigningKey, rekeySigningKey;
 try {
   ogAccount = algosdk.mnemonicToSecretKey(process.env.REWARD_MNEMONIC);
   rekeyAccount = algosdk.mnemonicToSecretKey(process.env.REWARD_REKEY);
   treasuryAddr = ogAccount.addr;     // SENDER on rekeyed txns
-  signingKey = rekeyAccount.sk;       // What actually signs
+  ogSigningKey = ogAccount.sk;
+  rekeySigningKey = rekeyAccount.sk;
 } catch (err) {
   logger.warn('REWARD_MNEMONIC/REWARD_REKEY not configured for vestingService:', err.message);
 }
@@ -75,15 +76,20 @@ function computeClaimable({ totalAllocation, alreadyClaimed, vestingStartDate, d
  * @param {number} [asaId=FRY_ASA_ID] - ASA to send (defaults to FRY 2.0)
  * @returns {Promise<{ txId: string }>}
  */
-async function sendVestedTokens(recipientWallet, microAmount, asaId = FRY_ASA_ID) {
-  if (!signingKey) {
+async function sendVestedTokens(recipientWallet, microAmount, asaId = FRY_ASA_ID, chainId = 'algorand-mainnet') {
+  if (!ogSigningKey || !rekeySigningKey) {
     throw new Error('Vesting signing keys not configured');
   }
   if (microAmount <= 0) {
     throw new Error('Claim amount must be positive');
   }
 
-  const result = await withFallback(async (client) => {
+  const result = await withFallbackForChain(chainId, async (client) => {
+    // Determine signing key for this chain (rekeyed vs original)
+    const acctInfo = await client.accountInformation(treasuryAddr).do();
+    const authAddr = acctInfo['auth-addr'] || acctInfo.address;
+    const signingKey = (authAddr !== treasuryAddr) ? rekeySigningKey : ogSigningKey;
+
     const params = await client.getTransactionParams().do();
 
     const txn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({

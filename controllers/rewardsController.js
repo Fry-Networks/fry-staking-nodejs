@@ -13,14 +13,18 @@ const FeeConfig = require('../models/feeConfigSchema');
 const GasFee = require('../models/gasFeeSchema');
 
 // Rekeyed wallet signing setup (deferred — rewards endpoints will fail gracefully if mnemonics are missing)
-let ogAccount, rekeyAccount, treasuryAddr, signingKey;
+let ogAccount = null, rekeyAccount = null, treasuryAddr = null, signingKey = null;
 try {
   ogAccount = algosdk.mnemonicToSecretKey(process.env.REWARD_MNEMONIC);
   rekeyAccount = algosdk.mnemonicToSecretKey(process.env.REWARD_REKEY);
   treasuryAddr = ogAccount.addr;
   signingKey = rekeyAccount.sk;
 } catch (err) {
-  logger.warn('REWARD_MNEMONIC/REWARD_REKEY not configured — reward claiming will be unavailable:', err.message);
+  logger.critical('REWARD_MNEMONIC/REWARD_REKEY not configured — reward claiming will be unavailable:', err.message);
+  ogAccount = null;
+  rekeyAccount = null;
+  treasuryAddr = null;
+  signingKey = null;
 }
 const { withFallback, getAlgodClient } = require('../services/algodService');
 
@@ -540,6 +544,10 @@ const getRewardsStatus = async (req, res) => {
  */
 const claimReward = async (req, res) => {
   try {
+    if (!ogAccount || !rekeyAccount) {
+      logger.error('REWARD_KEYS_MISSING — claim attempt blocked');
+      return res.status(503).json({ success: false, error: 'Reward service temporarily unavailable', code: 'REWARD_KEYS_MISSING' });
+    }
     const { fingerprint, turnstileToken } = req.body;
     const wallet = req.user.wallet;
     const ip = req.ip || req.connection.remoteAddress;
@@ -688,15 +696,32 @@ const claimReward = async (req, res) => {
       }).catch(err => logger.error('Failed to log daily claim fee:', err.message));
     }
 
-    // Update streak
-    streak.currentStreak = currentStreak + 1;
-    streak.lastClaimAt = new Date();
-    streak.totalClaimed += netReward;
-    streak.totalClaims += 1;
-    streak.trustScore = eligibility.trustScore;
-    streak.trustTier = eligibility.trustTier;
-    streak.suspicionFlags = eligibility.suspicionFlags;
-    await streak.save();
+    // Update streak with retry
+    let streakSaved = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        if (attempt > 1) {
+          streak = await WalletStreak.findOne({ walletAddress: wallet });
+          if (!streak) streak = new WalletStreak({ walletAddress: wallet });
+        }
+        streak.currentStreak = currentStreak + 1;
+        streak.lastClaimAt = new Date();
+        streak.totalClaimed += netReward;
+        streak.totalClaims += 1;
+        streak.trustScore = eligibility.trustScore;
+        streak.trustTier = eligibility.trustTier;
+        streak.suspicionFlags = eligibility.suspicionFlags;
+        await streak.save();
+        streakSaved = true;
+        break;
+      } catch (err) {
+        logger.error(`Streak save attempt ${attempt} failed for wallet ${wallet}: ${err.message}`);
+        if (attempt < 3) await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+    if (!streakSaved) {
+      logger.critical(`STREAK_SAVE_FAILED permanently for wallet ${wallet} on claim date ${claimDate}`);
+    }
 
     // Record in circuit breaker
     const isSuspicious = eligibility.suspicionFlags.length > 0;
@@ -968,6 +993,10 @@ const getVaultStatus = async (req, res) => {
  */
 const claimVault = async (req, res) => {
   try {
+    if (!ogAccount || !rekeyAccount) {
+      logger.error('REWARD_KEYS_MISSING — vault claim attempt blocked');
+      return res.status(503).json({ success: false, error: 'Reward service temporarily unavailable', code: 'REWARD_KEYS_MISSING' });
+    }
     const wallet = req.user.wallet;
     const { fingerprint, turnstileToken } = req.body;
     const ip = req.ip || req.connection.remoteAddress;

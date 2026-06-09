@@ -26,6 +26,7 @@ const challengeSchema = new mongoose.Schema({
       'referral',
       'nft_staking_volume',
       'prediction_lp_volume',
+      'genesis_nft_minting',
     ],
   },
   name: {

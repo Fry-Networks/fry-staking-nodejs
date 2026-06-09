@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth, requireAdmin } = require('../middleware/auth');
-const { algorandOnly } = require('../middleware/chainMiddleware');
 const { validate, communityEventCreateSchema, communityEventUpdateSchema, communityEventConfirmSchema } = require('../middleware/validate');
 const { getEventById, getLeaderboard, getUserEventPoints } = require('../controllers/eventController');
 const {
@@ -20,8 +19,6 @@ const {
   removeCommunityChallenge,
 } = require('../controllers/communityEventController');
 
-// All community event routes are Algorand-only (ASA reward funding)
-router.use(algorandOnly);
 
 // Public
 router.get('/', getCommunityEvents);

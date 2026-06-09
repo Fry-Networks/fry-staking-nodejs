@@ -7,6 +7,8 @@ const {
   proxyVestigeQuote,
   proxyVestigeTransactions,
   proxyDeflexQuote,
+  proxyHaystackQuote,
+  proxyHaystackPrepare,
   proxyDeflexTransactions,
 } = require('../controllers/swapProxyController');
 
@@ -22,6 +24,9 @@ router.get('/vestige/quote', proxyVestigeQuote);
 router.post('/vestige/transactions', proxyVestigeTransactions);
 
 // Deflex
+// Haystack Router
+router.get('/haystack/quote', proxyHaystackQuote);
+router.post('/haystack/prepare', proxyHaystackPrepare);
 router.post('/deflex/quote', proxyDeflexQuote);
 router.post('/deflex/transactions', proxyDeflexTransactions);
 

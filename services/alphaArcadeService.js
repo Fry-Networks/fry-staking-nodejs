@@ -69,16 +69,41 @@ function getApiConfig() {
   };
 }
 
+const MARKETS_CACHE_KEY = 'alpha_live_markets';
+const MARKETS_CACHE_TTL = 300; // 5 min
+const MARKETS_STALE_TTL = 3600; // 1 hour stale fallback
+
 /**
  * Fetch all live markets from the Alpha Arcade API.
+ * Redis-cached (5-min TTL) with stale fallback on API errors (e.g. 429).
  */
 async function getMarkets() {
+  // Serve from cache if fresh
+  try {
+    const cached = await redis.get(MARKETS_CACHE_KEY);
+    if (cached) return JSON.parse(cached);
+  } catch (e) { /* cache miss */ }
+
+  // Cache miss — call external API
   try {
     const config = getApiConfig();
-    return await getLiveMarketsFromApi(config);
+    const markets = await getLiveMarketsFromApi(config);
+    try {
+      await redis.set(MARKETS_CACHE_KEY, JSON.stringify(markets), 'EX', MARKETS_CACHE_TTL);
+      await redis.set(MARKETS_CACHE_KEY + ':stale', JSON.stringify(markets), 'EX', MARKETS_STALE_TTL);
+    } catch (e) { /* cache write failed, non-fatal */ }
+    return markets;
   } catch (err) {
-    logger.error('Alpha Arcade getMarkets error:', err.message);
-    throw err;
+    // API error (429, timeout, etc.) — try stale cache
+    try {
+      const stale = await redis.get(MARKETS_CACHE_KEY + ':stale');
+      if (stale) {
+        logger.warn('Alpha Arcade getMarkets: serving stale cache due to API error: ' + err.message);
+        return JSON.parse(stale);
+      }
+    } catch (e) { /* no stale cache available */ }
+    logger.warn('Alpha Arcade getMarkets: API error with no cache fallback, returning empty: ' + err.message);
+    return [];
   }
 }
 
