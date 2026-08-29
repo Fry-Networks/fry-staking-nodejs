@@ -1,5 +1,8 @@
 name: Node.js CI/CD with Docker
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [ "main" ]
